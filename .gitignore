@@ -1,0 +1,31 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Claude Code local state (user-specific, do not publish) ---
+.claude/
+
+# --- Notebooks ---
+.ipynb_checkpoints/
+
+# --- Project: figures regenerate from scripts, don't track ---
+figures/*.png
+
+# --- Project: trained models (large) -- but keep the headline weights ---
+models/*.keras
+models/*.h5
+!models/dqn_trained.keras
