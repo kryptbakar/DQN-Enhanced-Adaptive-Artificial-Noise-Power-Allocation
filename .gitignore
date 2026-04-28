@@ -25,7 +25,9 @@ Thumbs.db
 # --- Project: figures regenerate from scripts, don't track ---
 figures/*.png
 
-# --- Project: trained models (large) -- but keep the headline weights ---
+# --- Project: trained models (large) -- but keep the per-Nt headline weights ---
 models/*.keras
 models/*.h5
-!models/dqn_trained.keras
+!models/dqn_trained_nt2.keras
+!models/dqn_trained_nt4.keras
+!models/dqn_trained_nt8.keras

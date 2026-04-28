@@ -1,7 +1,7 @@
 ﻿"""
 Full-system demonstration: 3-scheme comparison with a trained DQN.
 
-Loads models/dqn_trained.keras and produces two headline figures:
+Loads models/dqn_trained_nt4.keras and produces two headline figures:
 
     figures/04_three_scheme_comparison.png
         Top panel:    absolute Rs vs SNR for Fixed / Traditional(kappa=0.4) /
@@ -39,7 +39,7 @@ from core.schemes import (fixed_scheme, traditional_optimizer,
 from core.dqn_agent import DQNAgent, ACTION_RHOS
 
 
-MODEL_PATH = "models/dqn_trained.keras"
+MODEL_PATH = "models/dqn_trained_nt4.keras"
 FIG_DIR = "figures"
 KAPPA_EVAL = 0.4
 
@@ -49,7 +49,8 @@ def run_comparison(Nt: int = 4,
                    seed: int = 2026) -> None:
     if not os.path.isfile(MODEL_PATH):
         raise FileNotFoundError(
-            f"{MODEL_PATH} not found. Run `python train_dqn.py` first.")
+            f"{MODEL_PATH} not found. "
+            f"Run `python scripts/train_dqn.py --nt 4` first.")
 
     print(f"[LOAD] {MODEL_PATH}")
     agent = DQNAgent()

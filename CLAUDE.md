@@ -37,13 +37,20 @@ inside `evaluate_scheme()` in `core/schemes.py` — do not bypass it.
 | File | Role |
 |---|---|
 | `demo.py` | Phase 1+2 validation — null-space check, single-channel `Rs(ρ)` peak, Scheme 1 vs 2 at κ=1 |
-| `train_dqn.py` | Phase 3 — trains DQN for 5000 episodes, saves `models/dqn_trained.keras` and figure 03 |
-| `demo_full.py` | Headline 3-scheme comparison on unseen channels at κ=0.4, figures 04 + 05 |
+| `train_dqn.py` | Phase 3 — trains one DQN. `--nt {2,4,8}` selects antenna count; saves `models/dqn_trained_nt{Nt}.keras` |
+| `train_all_nt.py` | Convenience driver — trains DQN for Nt ∈ {2, 4, 8} (~55 s on CPU) |
+| `demo_full.py` | Headline 3-scheme comparison on unseen channels at κ=0.4, figures 04 + 05 (uses Nt=4 model) |
 | `run_experiments.py` | Phase 4 — runs all three experiments end-to-end, figures 06 + 07 + 08 |
 
+### `app/` — Phase 6 GUI + demo
+| File | Role |
+|---|---|
+| `streamlit_app.py` | Single-file Streamlit demonstrator (5 tabs: live demo, SNR sweep, κ sweep, outage, geometry sketch). Run with `streamlit run app/streamlit_app.py`. |
+| `demo.html` | Self-contained narrative demo for laymen — single HTML file, no install, no server. Two interactive sliders (ρ and κ), three "strategy" personas, embedded headline figure. Open by double-clicking. |
+
 ### `models/`, `figures/`
-- `models/dqn_trained.keras` is **tracked** (it's the headline result and small).
-  Other model files are gitignored.
+- `models/dqn_trained_nt{2,4,8}.keras` are **tracked** (small, headline weights).
+  Other `.keras` files are gitignored.
 - `figures/*.png` regenerate from scripts; gitignored.
 
 ## Conventions
@@ -72,10 +79,22 @@ inside `evaluate_scheme()` in `core/schemes.py` — do not bypass it.
 - **Phase 1** (channel + CSI + secrecy primitives): done.
 - **Phase 2** (Scheme 1 + Scheme 2 + simulator validation): done — figures 01, 02.
 - **Phase 3** (DQN training + 3-scheme comparison): done — figures 03, 04, 05.
-  Model in `models/dqn_trained.keras` was trained at **Nt=4** with κ ∈ [0.2, 0.8],
-  SNR ∈ [0, 30] dB.
-- **Phase 4** (experiments 2/4/5 — kappa, antenna count, outage): in progress.
-- **Phase 6** (Streamlit simulator): not started.
+  DQN trained at three antenna counts: `models/dqn_trained_nt{2,4,8}.keras`.
+  Hyperparams identical across Nt: κ ∈ [0.2, 0.8], SNR ∈ [0, 30] dB, 5000 eps.
+- **Phase 4** (experiments 2/4/5 — kappa, antenna count, outage): done — figures 06, 07, 08.
+  Experiment 4 now shows DQN on every panel (each panel uses the matching per-Nt model).
+- **Phase 6** (Streamlit GUI): minimal version live in `app/streamlit_app.py`.
+  Five tabs: live demo, SNR sweep, κ sweep, outage, geometry sketch.
+
+## Running the GUI
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+Sidebar selects Nt and seed. Each tab is interactive; results are cached
+per (Nt, SNR, κ, n_channels, seed) so dragging a slider back and forth
+is instant after the first eval.
 
 ## Key references
 
