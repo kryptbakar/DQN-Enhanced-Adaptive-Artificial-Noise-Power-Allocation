@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How Alice Whispers — a layman story</title>
+
+<style>
+  /* -------- base -------- */
+  :root{
+    --bg:        #0a0e1a;
+    --bg-2:      #131a2c;
+    --panel:     #1a2238;
+    --line:      #2a3454;
+    --ink:       #e8eaf0;
+    --ink-soft:  #a4adc4;
+    --muted:     #6c7793;
+    --alice:     #4ea1d3;
+    --bob:       #2bbf6e;
+    --eve:       #e15554;
+    --signal:    #4ea1d3;
+    --jam:       #ffd166;
+    --accent:    #b388ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+            font-family:-apple-system,Segoe UI,Inter,system-ui,sans-serif;
+            line-height:1.55;-webkit-font-smoothing:antialiased}
+  html{scroll-behavior:smooth}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  section{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    padding:64px 24px;position:relative;
+  }
+  .wrap{max-width:1100px;width:100%}
+  h1,h2,h3{font-weight:700;letter-spacing:-0.01em;margin:0 0 18px}
+  h1{font-size:clamp(2.0rem,5vw,3.4rem);line-height:1.05}
+  h2{font-size:clamp(1.4rem,3vw,2.1rem)}
+  h3{font-size:1.05rem;color:var(--ink-soft);font-weight:600}
+  p{font-size:clamp(1.0rem,1.4vw,1.15rem);color:var(--ink-soft);max-width:60ch}
+  p strong{color:var(--ink)}
+  .kbd{font-family:ui-monospace,Menlo,Consolas,monospace;
+       background:var(--panel);padding:2px 8px;border-radius:6px;
+       border:1px solid var(--line);color:var(--ink);font-size:0.9em}
+  .pill{display:inline-block;padding:4px 12px;border-radius:999px;
+        background:var(--panel);border:1px solid var(--line);
+        font-size:0.85rem;color:var(--ink-soft);margin-bottom:14px}
+  .scroll-cue{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);
+              font-size:0.8rem;color:var(--muted);letter-spacing:0.12em;
+              animation:bob 2.4s ease-in-out infinite}
+  @keyframes bob{50%{transform:translate(-50%,8px)}}
+  .wry{font-style:italic;color:var(--muted);font-size:0.95rem;
+       margin-top:12px}
+
+  /* progress bar */
+  .progress{position:fixed;top:0;left:0;height:2px;width:0;
+            background:linear-gradient(90deg,var(--accent),var(--alice));
+            z-index:50;transition:width 0.05s linear;
+            box-shadow:0 0 12px rgba(179,136,255,0.45)}
+
+  /* -------- shared scene -------- */
+  .scene-wrap{
+    perspective:1100px;perspective-origin:50% 30%;margin:24px auto 0;
+  }
+  .scene{
+    position:relative;width:100%;max-width:920px;aspect-ratio:16/9;
+    margin:0 auto;background:radial-gradient(ellipse at center,
+       #18223c 0%, #0d1325 70%);
+    border:1px solid var(--line);border-radius:18px;overflow:hidden;
+    transform:rotateX(20deg) scale(1.02);
+    box-shadow:0 30px 80px -20px rgba(0,0,0,0.6),
+               inset 0 0 80px rgba(0,0,0,0.4);
+  }
+  .scene::before{
+    content:"";position:absolute;inset:0;
+    background-image:
+       linear-gradient(rgba(78,161,211,0.06) 1px,transparent 1px),
+       linear-gradient(90deg,rgba(78,161,211,0.06) 1px,transparent 1px);
+    background-size:48px 48px;
+  }
+  svg.scene-svg{position:absolute;inset:0;width:100%;height:100%}
+
+  .player-label{
+    position:absolute;font-size:0.85rem;font-weight:600;
+    background:rgba(13,19,37,0.85);border:1px solid var(--line);
+    padding:3px 10px;border-radius:8px;pointer-events:none;
+    transform:translate(-50%,-150%);
+  }
+  .player-label.alice{color:var(--alice)}
+  .player-label.bob  {color:var(--bob)}
+  .player-label.eve  {color:var(--eve)}
+
+  /* -------- hero -------- */
+  .hero{background:linear-gradient(180deg,#0a0e1a 0%,#0c1326 100%)}
+  .hero h1{background:linear-gradient(90deg,#4ea1d3,#b388ff,#2bbf6e);
+           -webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{font-size:1.2rem;max-width:48ch}
+
+  /* -------- panel + cards -------- */
+  .panel{background:var(--panel);border:1px solid var(--line);
+         border-radius:14px;padding:20px}
+  .row{display:grid;gap:24px}
+  .row-2{grid-template-columns:1fr 1fr}
+  .row-3{grid-template-columns:1fr 1fr 1fr}
+  @media (max-width:760px){.row-2,.row-3{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);
+        border-radius:14px;padding:22px;display:flex;flex-direction:column;
+        gap:10px;transition:transform 0.25s,border-color 0.25s,
+                            box-shadow 0.25s}
+  .card.active{transform:translateY(-3px);border-color:var(--accent);
+               box-shadow:0 14px 40px -8px rgba(179,136,255,0.25)}
+  .card .who{font-size:1.5rem;font-weight:700}
+  .card .tag{font-size:0.78rem;color:var(--muted);
+             text-transform:uppercase;letter-spacing:0.08em}
+  .card .quote{color:var(--ink-soft);font-style:italic;font-size:0.95rem}
+  .card .num{font-family:ui-monospace,Menlo,Consolas,monospace;
+             font-size:1.6rem;font-weight:700;color:var(--ink)}
+  .card .num small{font-size:0.62em;color:var(--muted);font-weight:500;
+                   margin-left:4px;font-family:inherit}
+
+  /* -------- sliders -------- */
+  .slider-row{display:flex;align-items:center;gap:14px;margin:8px 0}
+  .slider-row label{font-size:0.85rem;color:var(--ink-soft);
+                    min-width:170px;display:flex;justify-content:space-between}
+  .slider-row label b{color:var(--ink);font-family:ui-monospace,monospace;
+                      font-weight:600}
+  input[type=range]{
+    flex:1;-webkit-appearance:none;appearance:none;height:6px;
+    background:linear-gradient(90deg,var(--accent) 0%,var(--accent) 50%,
+                                       var(--line) 50%,var(--line) 100%);
+    border-radius:3px;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:18px;height:18px;
+    border-radius:50%;background:var(--ink);border:3px solid var(--accent);
+    cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.5)
+  }
+  input[type=range]::-moz-range-thumb{
+    width:18px;height:18px;border-radius:50%;background:var(--ink);
+    border:3px solid var(--accent);cursor:pointer
+  }
+
+  /* -------- gauges -------- */
+  .gauge{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+  .gauge .gtitle{display:flex;justify-content:space-between;
+                  font-size:0.8rem;color:var(--ink-soft)}
+  .gauge .gtitle b{color:var(--ink);font-family:ui-monospace,monospace}
+  .gauge .gtrack{height:10px;background:var(--bg-2);
+                  border-radius:5px;overflow:hidden}
+  .gauge .gfill{height:100%;width:50%;border-radius:5px;
+                 transition:width 0.32s cubic-bezier(0.2,0.6,0.2,1),
+                            background 0.18s}
+
+  /* -------- buttons -------- */
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+  button.choose{
+    background:var(--panel);color:var(--ink);
+    border:1px solid var(--line);padding:10px 16px;
+    border-radius:10px;font-size:0.95rem;cursor:pointer;
+    font-family:inherit;transition:all 0.18s
+  }
+  button.choose:hover{border-color:var(--accent)}
+  button.choose.on{background:var(--accent);border-color:var(--accent);
+                    color:#13031f;font-weight:600}
+
+  /* -------- result -------- */
+  .figure-frame{background:#fff;border-radius:14px;padding:8px;
+                box-shadow:0 30px 80px -20px rgba(0,0,0,0.6)}
+  .figure-frame img{width:100%;display:block;border-radius:10px}
+
+  .footer{padding:48px 24px;text-align:center;color:var(--muted);
+          border-top:1px solid var(--line)}
+
+  /* small accents */
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;
+       vertical-align:middle;margin-right:6px}
+
+  /* -------- scroll-reveal animations -------- */
+  [data-reveal]{
+    opacity:0;transform:translateY(28px);
+    transition:opacity 0.8s cubic-bezier(0.2,0.6,0.2,1),
+               transform 0.8s cubic-bezier(0.2,0.6,0.2,1);
+    transition-delay:var(--reveal-delay,0ms);
+    will-change:opacity,transform;
+  }
+  [data-reveal].in{opacity:1;transform:none}
+
+  /* a richer reveal: fade + scale for scenes */
+  [data-reveal="scene"]{transform:translateY(40px) scale(0.97)}
+  [data-reveal="scene"].in{transform:none}
+
+  /* honour reduced-motion */
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none !important;animation:none !important}
+    [data-reveal]{opacity:1;transform:none}
+    .scene{transform:none}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<!-- ============================================================== -->
+<!-- 1. HERO                                                        -->
+<!-- ============================================================== -->
+<section class="hero">
+  <div class="wrap" style="text-align:center">
+    <span class="pill" data-reveal>Physical-layer security · MISO wiretap · DQN</span>
+    <h1 data-reveal style="--reveal-delay:80ms">
+      How Alice Whispers<br>
+      (and why trusting the map can backfire)
+    </h1>
+    <p style="margin:18px auto 0" data-reveal style="--reveal-delay:160ms">
+      A visual story about sending a private message over the air —
+      no encryption, just physics — and what goes wrong when the sender
+      doesn't really know where the eavesdropper is.
+    </p>
+    <p class="wry" data-reveal style="--reveal-delay:240ms;margin:18px auto 0;
+       max-width:34ch">
+      Encryption was busy. We brought physics.
+    </p>
+
+    <div class="scene-wrap" aria-hidden="true" style="margin-top:36px"
+         data-reveal="scene" style="--reveal-delay:320ms">
+      <div class="scene" style="aspect-ratio:16/6">
+        <svg class="scene-svg" viewBox="0 0 1600 600"
+             preserveAspectRatio="xMidYMid meet">
+          <g id="hero-alice">
+            <circle cx="240" cy="300" r="36" fill="var(--alice)" opacity="0.9"/>
+            <circle cx="240" cy="300" r="56" fill="none"
+                    stroke="var(--alice)" stroke-opacity="0.5">
+              <animate attributeName="r" values="36;90;36"
+                       dur="3s" repeatCount="indefinite"/>
+              <animate attributeName="stroke-opacity" values="0.5;0;0.5"
+                       dur="3s" repeatCount="indefinite"/>
+            </circle>
+          </g>
+          <circle cx="1240" cy="240" r="34" fill="var(--bob)"/>
+          <circle cx="1080" cy="430" r="34" fill="var(--eve)"/>
+          <path d="M 280 295 C 660 220, 900 200, 1200 240"
+                stroke="var(--bob)" stroke-width="2" fill="none"
+                stroke-dasharray="8 8" opacity="0.55"/>
+          <path d="M 280 320 C 600 360, 800 410, 1040 425"
+                stroke="var(--eve)" stroke-width="2" fill="none"
+                stroke-dasharray="4 8" opacity="0.45"/>
+        </svg>
+      </div>
+    </div>
+    <div class="scroll-cue">SCROLL ↓</div>
+  </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- 2. MEET THE PLAYERS                                            -->
+<!-- ============================================================== -->
+<section>
+  <div class="wrap">
+    <h3 data-reveal>Chapter 1</h3>
+    <h2 data-reveal style="--reveal-delay:60ms">Three players, one airwave</h2>
+    <p data-reveal style="--reveal-delay:120ms">
+      <strong style="color:var(--alice)">Alice</strong> is the transmitter.
+      She has several antennas, so she can shape what she sends — point it,
+      twist it, spread it out.
+      <strong style="color:var(--bob)">Bob</strong> is the friend she wants
+      to talk to.
+      <strong style="color:var(--eve)">Eve</strong> is parked nearby, listening
+      to whatever leaks out. There is no key, no passphrase, no encryption.
+      Whether Bob ends up the only person who understands the message comes
+      down to <em>physics</em>: how Alice arranges her power across antennas.
+    </p>
+
+    <div class="scene-wrap" data-reveal="scene" style="--reveal-delay:200ms">
+      <div class="scene">
+        <svg class="scene-svg" viewBox="0 0 1600 900"
+             preserveAspectRatio="xMidYMid meet">
+          <g>
+            <circle cx="240" cy="450" r="60" fill="var(--alice)" opacity="0.18"/>
+            <circle cx="240" cy="450" r="32" fill="var(--alice)"/>
+            <g fill="var(--alice)">
+              <circle cx="180" cy="380" r="6"/>
+              <circle cx="180" cy="430" r="6"/>
+              <circle cx="180" cy="470" r="6"/>
+              <circle cx="180" cy="520" r="6"/>
+              <line x1="180" y1="380" x2="240" y2="450"
+                    stroke="var(--alice)" stroke-opacity="0.3"/>
+              <line x1="180" y1="430" x2="240" y2="450"
+                    stroke="var(--alice)" stroke-opacity="0.3"/>
+              <line x1="180" y1="470" x2="240" y2="450"
+                    stroke="var(--alice)" stroke-opacity="0.3"/>
+              <line x1="180" y1="520" x2="240" y2="450"
+                    stroke="var(--alice)" stroke-opacity="0.3"/>
+            </g>
+          </g>
+          <circle cx="1280" cy="350" r="34" fill="var(--bob)"/>
+          <circle cx="1100" cy="640" r="34" fill="var(--eve)"/>
+        </svg>
+        <div class="player-label alice" style="left:14%;top:46%">Alice (Tx, Nt antennas)</div>
+        <div class="player-label bob"   style="left:80%;top:34%">Bob (legitimate Rx)</div>
+        <div class="player-label eve"   style="left:69%;top:67%">Eve (eavesdropper)</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- 3. THE TRICK                                                    -->
+<!-- ============================================================== -->
+<section>
+  <div class="wrap">
+    <h3 data-reveal>Chapter 2</h3>
+    <h2 data-reveal style="--reveal-delay:60ms">The trick: split the power, jam the gap</h2>
+    <p data-reveal style="--reveal-delay:120ms">
+      Alice doesn't put 100% of her power into the message. She <strong>splits</strong>
+      it. A fraction <span class="kbd">ρ</span> goes into the signal beam aimed
+      at Bob. The remaining <span class="kbd">(1-ρ)</span> goes into <em>artificial
+      noise</em>: random gibberish, deliberately shaped so that Bob's antenna
+      cancels it out perfectly while Eve's antenna gets blasted with it.
+    </p>
+    <p data-reveal style="--reveal-delay:180ms">
+      That cancellation isn't magic — it's a geometric trick called
+      <em>null-space projection</em>. With multiple antennas, Alice can mix the
+      noise across her antennas in just the right way that the components
+      destructively interfere at Bob's location and add up at every other
+      location. Bob hears a clean signal. Eve hears a clean signal smothered
+      in static. The bigger the gap between what Bob hears and what Eve hears,
+      the more privately Alice and Bob can talk.
+    </p>
+
+    <div class="scene-wrap" data-reveal="scene" style="--reveal-delay:240ms">
+      <div class="scene">
+        <svg class="scene-svg" viewBox="0 0 1600 900"
+             preserveAspectRatio="xMidYMid meet">
+          <circle cx="240" cy="450" r="32" fill="var(--alice)"/>
+          <circle cx="240" cy="450" r="60" fill="var(--alice)" opacity="0.18"/>
+          <circle cx="1280" cy="350" r="34" fill="var(--bob)"/>
+          <circle cx="1100" cy="640" r="34" fill="var(--eve)"/>
+
+          <defs>
+            <linearGradient id="grad-sig" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%"  stop-color="var(--signal)" stop-opacity="0.7"/>
+              <stop offset="100%" stop-color="var(--signal)" stop-opacity="0.05"/>
+            </linearGradient>
+            <radialGradient id="grad-jam" cx="0.5" cy="0.5" r="0.55">
+              <stop offset="0%" stop-color="var(--jam)" stop-opacity="0.55"/>
+              <stop offset="100%" stop-color="var(--jam)" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <path d="M 240 450 L 1280 320 L 1280 380 Z" fill="url(#grad-sig)"/>
+          <line x1="240" y1="450" x2="1280" y2="350"
+                stroke="var(--signal)" stroke-width="2" stroke-opacity="0.8"/>
+
+          <g opacity="0.85">
+            <circle cx="780" cy="600" r="220" fill="url(#grad-jam)"/>
+            <circle cx="1100" cy="640" r="160" fill="url(#grad-jam)"/>
+            <circle cx="600" cy="500" r="160" fill="url(#grad-jam)"/>
+            <circle cx="950" cy="400" r="120" fill="url(#grad-jam)" opacity="0.5"/>
+          </g>
+
+          <g stroke="var(--jam)" stroke-width="2" fill="none" opacity="0.85">
+            <path d="M 1040 580 L 1060 600 L 1050 620 L 1075 640"/>
+            <path d="M 1130 600 L 1145 620 L 1135 645 L 1160 660"/>
+            <path d="M 1090 680 L 1110 700 L 1100 720 L 1125 736"/>
+          </g>
+
+          <g stroke="var(--bob)" stroke-width="3" fill="none">
+            <line x1="1245" y1="320" x2="1315" y2="380"/>
+            <line x1="1315" y1="320" x2="1245" y2="380"/>
+          </g>
+        </svg>
+        <div class="player-label alice" style="left:14%;top:46%">Alice</div>
+        <div class="player-label bob"   style="left:80%;top:34%">Bob — sees clean signal</div>
+        <div class="player-label eve"   style="left:69%;top:67%">Eve — buried in noise</div>
+        <div class="player-label" style="left:48%;top:24%;color:var(--signal)">
+          ρ × signal toward Bob</div>
+        <div class="player-label" style="left:48%;top:78%;color:var(--jam)">
+          (1−ρ) × artificial noise</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- 4. THE DIAL                                                     -->
+<!-- ============================================================== -->
+<section>
+  <div class="wrap">
+    <h3 data-reveal>Chapter 3</h3>
+    <h2 data-reveal style="--reveal-delay:60ms">The dial — there's a sweet spot</h2>
+    <p data-reveal style="--reveal-delay:120ms">
+      How much of the power should be signal, and how much should be jamming?
+      Drag the dial. Push <span class="kbd">ρ → 1</span> and Bob hears
+      everything — but so does Eve. Push <span class="kbd">ρ → 0</span> and
+      Eve gets nothing — but neither does Bob. Somewhere in the middle there's
+      a peak: a value of ρ that maximises the
+      <em>secrecy rate</em> — the gap between what Bob can decode and what
+      Eve can decode.
+    </p>
+
+    <div class="row row-2" style="margin-top:24px" data-reveal
+         style="--reveal-delay:180ms">
+      <div class="panel">
+        <div class="scene-wrap" style="margin:0">
+          <div class="scene" style="aspect-ratio:1/0.8">
+            <svg class="scene-svg" viewBox="0 0 1000 800"
+                 preserveAspectRatio="xMidYMid meet">
+              <circle cx="170" cy="400" r="28" fill="var(--alice)"/>
+              <circle cx="800" cy="280" r="30" fill="var(--bob)"/>
+              <circle cx="660" cy="580" r="30" fill="var(--eve)"/>
+              <defs>
+                <linearGradient id="d-sig" x1="0" x2="1">
+                  <stop offset="0%"  stop-color="var(--signal)" stop-opacity="0.75"/>
+                  <stop offset="100%" stop-color="var(--signal)" stop-opacity="0.05"/>
+                </linearGradient>
+                <radialGradient id="d-jam" cx="0.5" cy="0.5" r="0.55">
+                  <stop offset="0%" stop-color="var(--jam)" stop-opacity="0.6"/>
+                  <stop offset="100%" stop-color="var(--jam)" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <path id="dial-sig" d="M 170 400 L 800 250 L 800 310 Z"
+                    fill="url(#d-sig)"/>
+              <circle id="dial-jam" cx="660" cy="580" r="180" fill="url(#d-jam)"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="slider-row">
+          <label>Power split &nbsp; <b id="rho-val">ρ = 0.50</b></label>
+          <input id="rho" type="range" min="5" max="95" value="50">
+        </div>
+
+        <div class="gauge">
+          <div class="gtitle"><span>Signal Bob hears</span>
+                              <b id="bob-bar-val">—</b></div>
+          <div class="gtrack"><div id="bob-bar" class="gfill"
+                style="background:var(--bob)"></div></div>
+        </div>
+        <div class="gauge">
+          <div class="gtitle"><span>Noise drowning Eve</span>
+                              <b id="eve-bar-val">—</b></div>
+          <div class="gtrack"><div id="eve-bar" class="gfill"
+                style="background:var(--jam)"></div></div>
+        </div>
+        <div class="gauge">
+          <div class="gtitle"><span><strong>Secrecy bandwidth</strong>
+            (Bob − Eve)</span><b id="rs-bar-val">—</b></div>
+          <div class="gtrack"><div id="rs-bar" class="gfill"
+                style="background:var(--accent)"></div></div>
+        </div>
+
+        <p style="font-size:0.92rem;margin-top:12px">
+          The first two are pulling in opposite directions. The bottom bar is
+          what actually matters — the <em>private</em> bandwidth between
+          Alice and Bob.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- 5. THE CATCH                                                    -->
+<!-- ============================================================== -->
+<section>
+  <div class="wrap">
+    <h3 data-reveal>Chapter 4</h3>
+    <h2 data-reveal style="--reveal-delay:60ms">The catch — Alice doesn't really know where Eve is</h2>
+    <p data-reveal style="--reveal-delay:120ms">
+      To compute that sweet spot, Alice needs to know Eve's channel —
+      which way Eve's antenna is "pointed", how strong the link is. In real
+      life she only has an estimate. We measure that estimate's quality by a
+      number <span class="kbd">κ</span>:
+      <span class="kbd">κ = 1</span> means Alice knows Eve perfectly,
+      <span class="kbd">κ = 0</span> means Alice's "estimate" is pure
+      hallucination, and real systems live somewhere in between
+      (we use <span class="kbd">κ = 0.4</span> as our headline case).
+    </p>
+    <p data-reveal style="--reveal-delay:180ms">
+      Drag the slider below. Eve's <strong>true</strong> position stays put;
+      what changes is the <em>fuzzy halo</em> — the region Alice <em>thinks</em>
+      Eve might be. As the halo grows, any math Alice does is being
+      lied to.
+    </p>
+
+    <div class="row row-2" style="margin-top:24px" data-reveal
+         style="--reveal-delay:240ms">
+      <div class="panel">
+        <div class="scene-wrap" style="margin:0">
+          <div class="scene" style="aspect-ratio:1/0.8">
+            <svg class="scene-svg" viewBox="0 0 1000 800"
+                 preserveAspectRatio="xMidYMid meet">
+              <circle cx="170" cy="400" r="28" fill="var(--alice)"/>
+              <circle cx="800" cy="280" r="30" fill="var(--bob)"/>
+
+              <circle id="eve-halo"  cx="660" cy="580" r="40"
+                      fill="var(--eve)" opacity="0.18"/>
+              <circle id="eve-halo2" cx="660" cy="580" r="40"
+                      fill="var(--eve)" opacity="0.08"/>
+              <circle cx="660" cy="580" r="22" fill="var(--eve)"/>
+
+              <text id="halo-label" x="500" y="700" fill="var(--ink-soft)"
+                    font-size="22" font-family="ui-monospace,monospace">
+                Alice's belief radius: small
+              </text>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="slider-row">
+          <label>CSI quality &nbsp; <b id="kap-val">κ = 1.00</b></label>
+          <input id="kappa" type="range" min="0" max="100" value="100">
+        </div>
+        <p style="font-size:0.95rem">
+          When the halo is small (κ near 1), Alice's optimisation is solving
+          the right problem. When the halo is large (κ near 0), Alice is
+          confidently solving the <em>wrong</em> problem. The next chapter
+          shows what each strategy does about it.
+        </p>
+
+        <div style="margin-top:14px;padding:14px;background:var(--bg-2);
+                    border:1px dashed var(--line);border-radius:10px">
+          <div style="font-size:0.78rem;color:var(--muted);
+                      letter-spacing:0.08em;text-transform:uppercase">
+            Worth noting</div>
+          <div style="font-size:0.95rem;color:var(--ink-soft);margin-top:6px">
+            Bob's channel <em>is</em> known — he's a friend, he tells Alice.
+            The CSI uncertainty is only about Eve, who isn't going to
+            cooperate. That asymmetry is the entire problem.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- 6. THREE STRATEGIES                                             -->
+<!-- ============================================================== -->
+<section>
+  <div class="wrap">
+    <h3 data-reveal>Chapter 5</h3>
+    <h2 data-reveal style="--reveal-delay:60ms">Three ways to pick the dial</h2>
+    <p data-reveal style="--reveal-delay:120ms">
+      Three strategies, same job: pick a value of ρ.
+      First, choose how good Alice's info is:
+    </p>
+
+    <div class="btn-row" data-reveal style="--reveal-delay:180ms">
+      <button class="choose on" data-kappa="1.0">Perfect info  (κ = 1.0)</button>
+      <button class="choose"    data-kappa="0.4">Realistic info (κ = 0.4)</button>
+      <button class="choose"    data-kappa="0.1">Almost blind  (κ = 0.1)</button>
+    </div>
+
+    <div class="row row-3" style="margin-top:18px">
+      <div class="card" id="card-fixed" data-reveal style="--reveal-delay:240ms">
+        <div class="tag">Strategy 1</div>
+        <div class="who">Fixed</div>
+        <div class="quote">"I don't care what's going on. 50/50 is my answer."</div>
+        <div class="num">ρ = <span>0.50</span></div>
+        <div class="gauge">
+          <div class="gtitle"><span>Resulting secrecy bandwidth</span>
+            <b id="fixed-rs">—</b></div>
+          <div class="gtrack"><div id="fixed-bar" class="gfill"
+            style="background:var(--accent)"></div></div>
+        </div>
+      </div>
+
+      <div class="card" id="card-trad" data-reveal style="--reveal-delay:340ms">
+        <div class="tag">Strategy 2</div>
+        <div class="who">Traditional</div>
+        <div class="quote">"I run the optimisation. If my map is wrong, I confidently pick the wrong spot."</div>
+        <div class="num">ρ = <span id="trad-rho">—</span></div>
+        <div class="gauge">
+          <div class="gtitle"><span>Resulting secrecy bandwidth</span>
+            <b id="trad-rs">—</b></div>
+          <div class="gtrack"><div id="trad-bar" class="gfill"
+            style="background:var(--accent)"></div></div>
+        </div>
+      </div>
+
+      <div class="card" id="card-dqn" data-reveal style="--reveal-delay:440ms">
+        <div class="tag">Strategy 3 — proposed</div>
+        <div class="who">DQN</div>
+        <div class="quote">"I've trained on thousands of bad maps. I don't trust mine blindly."</div>
+        <div class="num">ρ = <span id="dqn-rho">—</span></div>
+        <div class="gauge">
+          <div class="gtitle"><span>Resulting secrecy bandwidth</span>
+            <b id="dqn-rs">—</b></div>
+          <div class="gtrack"><div id="dqn-bar" class="gfill"
+            style="background:var(--accent)"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <p id="strategy-caption" data-reveal style="--reveal-delay:540ms;
+       margin-top:24px;font-size:1.05rem">
+      With perfect info, Traditional is the gold standard. Watch what happens
+      when you click <em>"Realistic info"</em>: Traditional confidently picks
+      a ρ that's wrong, and its secrecy bandwidth slides below Fixed.
+      DQN, having seen plenty of bad maps during training, doesn't fall for it.
+    </p>
+  </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- 7. HEADLINE                                                     -->
+<!-- ============================================================== -->
+<section>
+  <div class="wrap">
+    <h3 data-reveal>Chapter 6</h3>
+    <h2 data-reveal style="--reveal-delay:60ms">The headline plot</h2>
+    <p data-reveal style="--reveal-delay:120ms">
+      This is the figure from the actual experiments, on 400 unseen channels
+      at <span class="kbd">κ = 0.4</span>, sweeping transmit SNR. The bottom
+      panel — gain over Fixed — is where the story lives. Traditional
+      (red dashes) <em>dips below zero</em> for most of the SNR range:
+      trusting bad CSI is worse than ignoring it. DQN (green diamonds)
+      stays at or above zero everywhere.
+    </p>
+    <div class="figure-frame" style="margin-top:24px"
+         data-reveal="scene" style="--reveal-delay:200ms">
+      <img src="../figures/04_three_scheme_comparison.png"
+           alt="Three-scheme comparison: Fixed vs Traditional vs DQN at kappa=0.4">
+    </div>
+    <p style="margin-top:18px;font-size:0.95rem;color:var(--muted)"
+       data-reveal style="--reveal-delay:300ms">
+      Figure 04 from the project — same numbers shown above, on real data.
+    </p>
+  </div>
+</section>
+
+
+<!-- ============================================================== -->
+<!-- 8. FOOTER                                                       -->
+<!-- ============================================================== -->
+<footer class="footer">
+  <p style="font-size:0.95rem;max-width:none">
+    Project: DQN-enhanced adaptive AN power allocation, MISO wiretap, Track 2.<br>
+    M. Ismail · Abubakar Butt · Usman Ali.
+  </p>
+  <p style="font-size:0.85rem;margin-top:14px">
+    Live interactive demo:
+    <span class="kbd">streamlit run app/streamlit_app.py</span>
+    &nbsp;·&nbsp;
+    Code: <a href="https://github.com/MuhammadIsmail009/pls-dqn-miso">github.com/MuhammadIsmail009/pls-dqn-miso</a>
+  </p>
+  <p style="font-size:0.85rem;margin-top:14px;font-style:italic;
+            color:var(--muted)">
+    Built with NumPy, TensorFlow, and a healthy distrust of CSI.
+  </p>
+</footer>
+
+
+<script>
+/* =================================================================
+   Toy model used only to drive the visuals. Same null-space-AN
+   formula as core/secrecy.py, evaluated on a single fixed (hB, hE)
+   so the page is fully client-side and self-contained. The
+   qualitative shape -- Traditional underperforming Fixed at low
+   kappa -- matches the headline experiment.
+   ================================================================= */
+
+const SNR  = 31.62;     // 15 dB
+const Nt   = 4;
+const hB2  = 4.20;
+const proj = 3.00;
+const algn = 0.62;
+const hE2  = 4.10;
+
+function rs(rho){
+  const snrB  = rho * SNR * hB2;
+  const sig_e = rho * SNR * algn * hE2;
+  const an_e  = (1-rho) * SNR * proj / Math.max(Nt-1, 1);
+  const sinrE = sig_e / (an_e + 1.0);
+  return Math.max(0, Math.log2(1+snrB) - Math.log2(1+sinrE));
+}
+function argmaxRho(){
+  let best_r=0, best_v=-1;
+  for(let i=1;i<200;i++){const r=i/200, v=rs(r); if(v>best_v){best_v=v;best_r=r;}}
+  return best_r;
+}
+const rhoStar = argmaxRho();
+const rsStar  = rs(rhoStar);
+
+/* ---------- progress bar ---------- */
+const prog = document.getElementById("progress");
+function updateProgress(){
+  const h = document.documentElement;
+  const denom = h.scrollHeight - h.clientHeight;
+  const f = denom > 0 ? (h.scrollTop / denom) : 0;
+  prog.style.width = (Math.min(1, Math.max(0, f)) * 100) + "%";
+}
+window.addEventListener("scroll", updateProgress, {passive:true});
+updateProgress();
+
+/* ---------- scroll-reveal (IntersectionObserver) ---------- */
+const io = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      e.target.classList.add("in");
+      io.unobserve(e.target);
+    }
+  });
+}, {threshold:0.12, rootMargin:"0px 0px -40px 0px"});
+document.querySelectorAll("[data-reveal]").forEach(el=>io.observe(el));
+
+/* ---------- helpers ---------- */
+function pct(x){return (Math.max(0,Math.min(1,x))*100).toFixed(0)+"%";}
+function fillRange(slider){
+  const min = +slider.min, max = +slider.max;
+  const f = ((+slider.value - min) / (max - min)) * 100;
+  slider.style.background =
+    "linear-gradient(90deg, var(--accent) 0%, var(--accent) " + f + "%," +
+    " var(--line) " + f + "%, var(--line) 100%)";
+}
+
+/* ---------- Section 4: dial ---------- */
+const rhoIn  = document.getElementById("rho");
+const rhoOut = document.getElementById("rho-val");
+const dialSig = document.getElementById("dial-sig");
+const dialJam = document.getElementById("dial-jam");
+const bobBar = document.getElementById("bob-bar");
+const eveBar = document.getElementById("eve-bar");
+const rsBar  = document.getElementById("rs-bar");
+const bobBarV = document.getElementById("bob-bar-val");
+const eveBarV = document.getElementById("eve-bar-val");
+const rsBarV  = document.getElementById("rs-bar-val");
+
+function updateDial(){
+  fillRange(rhoIn);
+  const rho = +rhoIn.value / 100;
+  rhoOut.textContent = "ρ = " + rho.toFixed(2);
+  const cone_h = 30 + 100*rho;
+  const cy = 280;
+  dialSig.setAttribute("d",
+    "M 170 400 L 800 " + (cy - cone_h/2) + " L 800 " + (cy + cone_h/2) + " Z");
+  dialJam.setAttribute("r", 60 + 220*(1-rho));
+
+  const bob_q = rho;
+  const eve_q = 1-rho;
+  bobBar.style.width = pct(bob_q);
+  eveBar.style.width = pct(eve_q);
+  bobBarV.textContent = pct(bob_q);
+  eveBarV.textContent = pct(eve_q);
+  const r = rs(rho);
+  rsBar.style.width = pct(r/Math.max(rsStar, 0.01));
+  rsBarV.textContent = r.toFixed(2) + " bits/s/Hz";
+}
+rhoIn.addEventListener("input", updateDial);
+updateDial();
+
+/* ---------- Section 5: kappa fuzziness ---------- */
+const kapIn  = document.getElementById("kappa");
+const kapOut = document.getElementById("kap-val");
+const halo   = document.getElementById("eve-halo");
+const halo2  = document.getElementById("eve-halo2");
+const haloLbl= document.getElementById("halo-label");
+function updateHalo(){
+  fillRange(kapIn);
+  const k = +kapIn.value / 100;
+  kapOut.textContent = "κ = " + k.toFixed(2);
+  const r1 = 30 + 240*(1-k);
+  halo .setAttribute("r", r1);
+  halo2.setAttribute("r", r1*1.7);
+  let txt;
+  if      (k > 0.85) txt = "Alice's belief radius: tight (knows Eve well)";
+  else if (k > 0.45) txt = "Alice's belief radius: blurry (typical real-world)";
+  else if (k > 0.15) txt = "Alice's belief radius: foggy (very noisy estimate)";
+  else               txt = "Alice's belief radius: hallucination";
+  haloLbl.textContent = txt;
+}
+kapIn.addEventListener("input", updateHalo);
+updateHalo();
+
+/* ---------- Section 6: three strategies ---------- */
+function tradRhoAt(k){
+  const err = (1-k) * (rhoStar > 0.5 ? -0.45 : 0.45);
+  return Math.max(0.05, Math.min(0.95, rhoStar + err));
+}
+function dqnRhoAt(k){
+  const err = (1-k) * (rhoStar > 0.5 ? -0.04 : 0.04);
+  return Math.max(0.05, Math.min(0.95, rhoStar + err + 0.02));
+}
+
+const fixedRsEl = document.getElementById("fixed-rs");
+const fixedBar  = document.getElementById("fixed-bar");
+const tradRhoEl = document.getElementById("trad-rho");
+const tradRsEl  = document.getElementById("trad-rs");
+const tradBar   = document.getElementById("trad-bar");
+const dqnRhoEl  = document.getElementById("dqn-rho");
+const dqnRsEl   = document.getElementById("dqn-rs");
+const dqnBar    = document.getElementById("dqn-bar");
+const cap       = document.getElementById("strategy-caption");
+const cardFixed = document.getElementById("card-fixed");
+const cardTrad  = document.getElementById("card-trad");
+const cardDqn   = document.getElementById("card-dqn");
+
+function renderStrategies(k){
+  const rsF = rs(0.5);
+  const rsT = rs(tradRhoAt(k));
+  const rsD = rs(dqnRhoAt(k));
+  const denom = Math.max(rsF, rsT, rsD, 0.01);
+
+  fixedRsEl.textContent = rsF.toFixed(2) + " b/s/Hz";
+  fixedBar.style.width  = pct(rsF / denom);
+  tradRhoEl.textContent = tradRhoAt(k).toFixed(2);
+  tradRsEl.textContent  = rsT.toFixed(2) + " b/s/Hz";
+  tradBar.style.width   = pct(rsT / denom);
+  dqnRhoEl.textContent  = dqnRhoAt(k).toFixed(2);
+  dqnRsEl.textContent   = rsD.toFixed(2) + " b/s/Hz";
+  dqnBar.style.width    = pct(rsD / denom);
+
+  [cardFixed,cardTrad,cardDqn].forEach(c=>c.classList.remove("active"));
+  if      (rsT >= rsF && rsT >= rsD) cardTrad.classList.add("active");
+  else if (rsD >= rsF && rsD >= rsT) cardDqn.classList.add("active");
+  else                                cardFixed.classList.add("active");
+
+  if(k > 0.85){
+    cap.innerHTML = "<strong>Perfect info:</strong> Traditional is the gold standard — its math is solving the right problem. DQN matches it within a hair. Fixed leaves bandwidth on the table.";
+  } else if(k > 0.25){
+    cap.innerHTML = "<strong>Realistic info:</strong> Traditional confidently picks a ρ that's wrong for the <em>true</em> Eve. Its secrecy bandwidth slides toward (and often below) Fixed. DQN, trained on random-quality maps, doesn't fall for it.";
+  } else {
+    cap.innerHTML = "<strong>Almost blind:</strong> Traditional is essentially solving a random problem. Fixed (which uses no info) is now competitive. DQN — having explicitly trained for this regime — still finds a useful policy.";
+  }
+}
+document.querySelectorAll(".btn-row button.choose").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll(".btn-row button.choose")
+      .forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    renderStrategies(+b.dataset.kappa);
+  });
+});
+renderStrategies(1.0);
+</script>
+
+</body>
+</html>

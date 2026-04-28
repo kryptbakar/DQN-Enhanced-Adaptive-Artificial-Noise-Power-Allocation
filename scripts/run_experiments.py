@@ -6,9 +6,10 @@ Produces:
     figures/07_antenna_count.png       -- antenna-count effect, 1x3 panel
     figures/08_secrecy_outage.png      -- empirical secrecy outage probability
 
-Loads the trained DQN once per experiment from models/dqn_trained.keras.
-The DQN was trained at Nt=4 only, so experiment 4 only shows DQN on its
-Nt=4 panel (Fixed and Traditional are shown on all three).
+Loads the trained DQN(s) from models/dqn_trained_nt{Nt}.keras. Experiments
+2 and 5 use the Nt=4 model. Experiment 4 loads a separate DQN trained at
+each Nt in {2, 4, 8}; if a per-Nt model file is missing, that panel falls
+back to Fixed + Traditional only (and the script prints a warning).
 
 Usage:
     python scripts/run_experiments.py
@@ -26,8 +27,8 @@ from core.experiments import (experiment_2_kappa_sweep,
                               experiment_5_secrecy_outage)
 
 
-MODEL_PATH = "models/dqn_trained.keras"
-FIG_DIR    = "figures"
+MODEL_PATH_NT4 = "models/dqn_trained_nt4.keras"
+FIG_DIR        = "figures"
 
 
 def main() -> None:
@@ -42,14 +43,15 @@ def main() -> None:
     print("  Experiment 2: kappa sweep (CSI quality)")
     print("-" * 72)
     res2 = experiment_2_kappa_sweep(n_channels=400, snr_db=15.0,
-                                    model_path=MODEL_PATH, fig_dir=FIG_DIR)
+                                    model_path=MODEL_PATH_NT4,
+                                    fig_dir=FIG_DIR)
 
     # ---- Experiment 4 -- antenna-count effect ----
     print("-" * 72)
     print("  Experiment 4: antenna-count effect")
     print("-" * 72)
     res4 = experiment_4_antenna_count(n_channels=300, kappa=0.4,
-                                      model_path=MODEL_PATH, fig_dir=FIG_DIR)
+                                      fig_dir=FIG_DIR)
 
     # ---- Experiment 5 -- secrecy outage probability ----
     print("-" * 72)
@@ -57,7 +59,8 @@ def main() -> None:
     print("-" * 72)
     res5 = experiment_5_secrecy_outage(n_channels=1000, snr_db=15.0,
                                        kappa=0.4,
-                                       model_path=MODEL_PATH, fig_dir=FIG_DIR)
+                                       model_path=MODEL_PATH_NT4,
+                                       fig_dir=FIG_DIR)
 
     # ---- summary ----
     print(bar)

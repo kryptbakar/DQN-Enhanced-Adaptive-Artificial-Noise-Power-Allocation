@@ -3,6 +3,6 @@ scipy>=1.10
 matplotlib>=3.7
 tensorflow-cpu>=2.15     # Phase 3: DQN agent
 
-# Added in Phase 6 (Streamlit simulator):
-# streamlit>=1.28
-# plotly>=5.17
+# Phase 6 -- Streamlit simulator GUI
+streamlit>=1.28
+plotly>=5.17

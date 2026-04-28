@@ -50,11 +50,22 @@ from .dqn_agent import DQNAgent
 # Helpers
 # ---------------------------------------------------------------------------
 
+def default_model_path(Nt: int) -> str:
+    """
+    Canonical on-disk path for the trained DQN at antenna count Nt.
+
+    Mirrors scripts/train_dqn.py::model_path_for(). Kept here too so the
+    Streamlit app and other consumers don't need to import a script module.
+    """
+    return f"models/dqn_trained_nt{int(Nt)}.keras"
+
+
 def _load_dqn(model_path: str):
     """Load a trained DQN from disk and return (agent, scheme)."""
     if not os.path.isfile(model_path):
         raise FileNotFoundError(
-            f"{model_path} not found. Run `python scripts/train_dqn.py` first."
+            f"{model_path} not found. "
+            f"Run `python scripts/train_dqn.py --nt <Nt>` first."
         )
     agent = DQNAgent()
     agent.load(model_path)
@@ -72,7 +83,7 @@ def _sample_channels(Nt: int, n: int, rng: np.random.Generator):
 
 def experiment_2_kappa_sweep(n_channels: int = 400,
                              snr_db: float = 15.0,
-                             model_path: str = "models/dqn_trained.keras",
+                             model_path: str | None = None,
                              fig_dir: str = "figures",
                              Nt: int = 4,
                              seed: int = 2026) -> Dict[str, np.ndarray]:
@@ -82,6 +93,8 @@ def experiment_2_kappa_sweep(n_channels: int = 400,
     Returns a dict with keys: 'kappa', 'rs_fixed', 'rs_traditional', 'rs_dqn'.
     """
     os.makedirs(fig_dir, exist_ok=True)
+    if model_path is None:
+        model_path = default_model_path(Nt)
     _, dqn_scheme = _load_dqn(model_path)
 
     rng = np.random.default_rng(seed)
@@ -146,25 +159,36 @@ def experiment_2_kappa_sweep(n_channels: int = 400,
 
 def experiment_4_antenna_count(n_channels: int = 300,
                                kappa: float = 0.4,
-                               model_path: str = "models/dqn_trained.keras",
+                               model_paths: Dict[int, str] | None = None,
                                fig_dir: str = "figures",
                                nt_list=(2, 4, 8),
                                seed: int = 2026) -> Dict[str, Dict[str, np.ndarray]]:
     """
-    For each Nt in nt_list, sweep SNR and compare Fixed vs Traditional.
+    For each Nt in nt_list, sweep SNR and compare Fixed / Traditional / DQN.
 
-    The saved DQN was trained at Nt=4 only, so the DQN curve is included
-    only on the Nt=4 panel. Fixed and Traditional are shown on all three.
+    A separate DQN model trained at that Nt is loaded for each panel; the
+    file path defaults to default_model_path(Nt) but can be overridden via
+    `model_paths={2: ..., 4: ..., 8: ...}` if you trained elsewhere. If a
+    model file is missing, that panel falls back to Fixed + Traditional only
+    so the function still produces a figure.
 
-    Returns a nested dict keyed by Nt.
+    Returns a nested dict keyed by 'Nt={N}'.
     """
     os.makedirs(fig_dir, exist_ok=True)
     snr_db_range = np.arange(0, 31, 3, dtype=float)
 
-    # Lazy-load the DQN only once (used for the Nt=4 panel).
-    dqn_scheme = None
-    if 4 in nt_list:
-        _, dqn_scheme = _load_dqn(model_path)
+    if model_paths is None:
+        model_paths = {int(Nt): default_model_path(int(Nt)) for Nt in nt_list}
+
+    # Lazy-load each per-Nt DQN once. Missing files -> warn and skip DQN there.
+    dqn_schemes: Dict[int, object] = {}
+    for Nt in nt_list:
+        path = model_paths.get(int(Nt), default_model_path(int(Nt)))
+        if os.path.isfile(path):
+            _, dqn_schemes[int(Nt)] = _load_dqn(path)
+        else:
+            print(f"[EXP 4] WARN: {path} not found -- "
+                  f"DQN curve will be skipped on Nt={Nt} panel.")
 
     results: Dict[str, Dict[str, np.ndarray]] = {}
 
@@ -179,10 +203,11 @@ def experiment_4_antenna_count(n_channels: int = 300,
     for ax, Nt in zip(axes, nt_list):
         rng = np.random.default_rng(seed + int(Nt))
         channels = _sample_channels(int(Nt), n_channels, rng)
+        dqn_scheme = dqn_schemes.get(int(Nt))
 
         rs_fixed = np.zeros_like(snr_db_range)
         rs_trad  = np.zeros_like(snr_db_range)
-        rs_dqn   = np.zeros_like(snr_db_range) if Nt == 4 else None
+        rs_dqn   = np.zeros_like(snr_db_range) if dqn_scheme is not None else None
 
         print(f"\n  -- Nt = {Nt} --")
         if rs_dqn is not None:
@@ -194,7 +219,7 @@ def experiment_4_antenna_count(n_channels: int = 300,
             snr_lin = 10.0 ** (snr_db / 10.0)
             s_fix = s_tr = s_dq = 0.0
 
-            if Nt == 4 and dqn_scheme is not None:
+            if dqn_scheme is not None:
                 dqn_scheme.reset()
 
             for hB, hE in channels:
@@ -205,7 +230,7 @@ def experiment_4_antenna_count(n_channels: int = 300,
                                         hB, hE, hE_noisy, snr_lin)
                 s_fix += rf
                 s_tr  += rt
-                if Nt == 4 and dqn_scheme is not None:
+                if dqn_scheme is not None:
                     _, rd = evaluate_scheme(dqn_scheme,
                                             hB, hE, hE_noisy, snr_lin)
                     s_dq += rd
@@ -226,12 +251,10 @@ def experiment_4_antenna_count(n_channels: int = 300,
                 linewidth=1.8, markersize=5, label=f"Traditional (k={kappa})")
         if rs_dqn is not None:
             ax.plot(snr_db_range, rs_dqn, "D-", color="#2ca02c",
-                    linewidth=2.2, markersize=6, label=f"DQN (k={kappa})")
+                    linewidth=2.2, markersize=6,
+                    label=f"DQN @ Nt={Nt} (k={kappa})")
 
-        title = f"Nt = {Nt}"
-        if Nt == 4:
-            title += "  (DQN trained here)"
-        ax.set_title(title)
+        ax.set_title(f"Nt = {Nt}")
         ax.set_xlabel("Transmit SNR (dB)")
         ax.grid(True, alpha=0.3)
         ax.legend(loc="best", fontsize=8)
@@ -245,8 +268,7 @@ def experiment_4_antenna_count(n_channels: int = 300,
 
     axes[0].set_ylabel("Average secrecy rate  Rs  (bits/s/Hz)")
     fig.suptitle(f"Experiment 4 -- Antenna-count effect at kappa = {kappa}\n"
-                 f"DQN curve shown only at Nt = 4 "
-                 f"(saved model was trained at Nt = 4)",
+                 f"Each panel uses a DQN trained at that Nt",
                  fontsize=11)
     fig.tight_layout()
     out = os.path.join(fig_dir, "07_antenna_count.png")
@@ -264,7 +286,7 @@ def experiment_4_antenna_count(n_channels: int = 300,
 def experiment_5_secrecy_outage(n_channels: int = 1000,
                                 snr_db: float = 15.0,
                                 kappa: float = 0.4,
-                                model_path: str = "models/dqn_trained.keras",
+                                model_path: str | None = None,
                                 fig_dir: str = "figures",
                                 Nt: int = 4,
                                 seed: int = 2026) -> Dict[str, np.ndarray]:
@@ -279,6 +301,8 @@ def experiment_5_secrecy_outage(n_channels: int = 1000,
     plus the raw 'rs_*' arrays for further analysis.
     """
     os.makedirs(fig_dir, exist_ok=True)
+    if model_path is None:
+        model_path = default_model_path(Nt)
     _, dqn_scheme = _load_dqn(model_path)
 
     rng = np.random.default_rng(seed)
