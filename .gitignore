@@ -24,6 +24,9 @@ Thumbs.db
 
 # --- Project: figures regenerate from scripts, don't track ---
 figures/*.png
+# Exception: app/demo.html embeds figure 04 -- keep that one tracked so
+# GitHub Pages can serve it.
+!figures/04_three_scheme_comparison.png
 
 # --- Project: trained models (large) -- but keep the per-Nt headline weights ---
 models/*.keras
