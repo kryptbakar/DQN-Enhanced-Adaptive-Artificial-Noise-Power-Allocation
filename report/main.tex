@@ -105,19 +105,42 @@ the same optimiser. We show in this paper that the obvious fix is
 wrong: the optimiser amplifies the estimation noise, picks a confident
 but incorrect split, and ends up worse than not optimising at all.
 
-The contribution of this paper is to give Alice a learning-based way
-out of that trap. We train a deep Q-network (DQN)
-\cite{mnih2015human, sutton2018rl} over a distribution of CSI qualities
-so that the resulting policy knows how much to trust its own estimate.
-The DQN sees a seven-dimensional summary of the operating conditions,
-including the CSI-quality factor $\kappa$ and an alignment cue between
+\subsection{Problem statement}
+
+Concretely, the problem this paper addresses is the following. Alice
+is constrained to use the null-space AN construction of Goel--Negi
+\cite{goel2008guaranteeing} on a MISO wiretap channel. She must
+choose, on every transmission block, a single scalar $\rho \in (0, 1)$
+that splits her transmit power between the data signal and the
+artificial noise. Two classical answers exist: (i) the fixed split
+$\rho = 0.5$, which never fails catastrophically but leaves rate on
+the table; and (ii) a per-channel scalar optimisation against the
+noisy estimate $\hat{\mathbf{h}}_E$, which is rate-optimal under
+perfect CSI but, as shown below, drops \emph{below} the fixed
+baseline once the CSI-quality factor $\kappa$ falls below
+approximately $0.6$. Neither answer is acceptable in deployment: the
+fixed split is needlessly conservative when intel is good, and the
+optimiser is dangerously aggressive when intel is poor. The question
+this paper answers is therefore: \emph{can a single, deployment-ready
+policy be trained that achieves near-optimal $R_s$ when $\kappa$ is
+high, avoids the noisy-CSI collapse when $\kappa$ is low, and does so
+without retuning at every operating point?}
+
+\subsection{Contribution}
+
+We answer the question above with a learning-based scheme. We train a
+deep Q-network (DQN) \cite{mnih2015human, sutton2018rl} over a
+distribution of CSI qualities, antenna counts, and SNRs, so the
+resulting policy is trained to \emph{expect} noisy CSI rather than to
+be fooled by it. The DQN observes a seven-dimensional state that
+includes the CSI-quality factor $\kappa$ and an alignment cue between
 Bob's beam direction and the noisy Eve estimate. From that input it
-chooses one of seventeen candidate power splits. The motivation for
-treating CSI quality as a separate axis came from the friendly-jammer
-WSN scheme of Qasem et al.\ \cite{qasem2024pls}, who studied how an
-eavesdropper's geometric position interacts with an external jammer's
-power; we adapt the underlying robustness question to a MISO setting
-with collocated null-space AN.
+selects one of seventeen candidate power splits. The motivation for
+treating CSI quality as a distinct robustness axis came from the
+friendly-jammer WSN scheme of Qasem et al.\ \cite{qasem2024pls}, who
+study how an eavesdropper's geometric position interacts with an
+external jammer's power; we adapt that robustness question to a MISO
+setting with collocated null-space AN.
 
 The rest of the paper is organised as follows.
 Section~\ref{sec:related} reviews related work and presents an

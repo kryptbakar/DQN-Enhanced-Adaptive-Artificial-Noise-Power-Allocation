@@ -55,16 +55,25 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------------------------
-# Persona labels (kept in one place so they stay consistent across tabs)
+# Scheme labels — technical name first, plain-language gloss in brackets so
+# the demo is readable to a mixed audience while still naming the actual
+# constructs the report describes.
 # ---------------------------------------------------------------------------
 
-NAIVE_LABEL = "Naive"          # Scheme 1, Fixed rho=0.5
-MATH_LABEL  = "Mathematician"  # Scheme 2, scipy optimiser on noisy CSI
-DQN_LABEL   = "Smart Agent"    # Scheme 3, our DQN
+# Short labels for axes / chart legends
+NAIVE_LABEL = "Fixed (ρ = 0.5)"
+MATH_LABEL  = "Traditional"
+DQN_LABEL   = "DQN (ours)"
 
-NAIVE_FULL = "Naive (always 50/50)"
-MATH_FULL  = "Mathematician (trusts the noisy intel)"
-DQN_FULL   = "Smart Agent (our DQN)"
+# Long labels for metric tiles and walls of text
+NAIVE_FULL = "Fixed split (Goel–Negi, ρ = 0.5)"
+MATH_FULL  = "Traditional optimiser (scipy, trusts noisy ĥE)"
+DQN_FULL   = "DQN agent (our proposal, sees κ)"
+
+# One-line gloss shown next to the labels — keeps the layman story alive.
+NAIVE_GLOSS = "the do-nothing baseline — always 50/50"
+MATH_GLOSS  = "trusts the noisy intel and optimises"
+DQN_GLOSS   = "neural net, knows when to ignore bad intel"
 
 COLORS = {
     "fixed":       "#7f7f7f",   # grey
@@ -156,7 +165,7 @@ def eval_snr_sweep(Nt: int, kappa: float, snr_db_min: float,
             "rs_dqn": means_dqn if dqn_ok_any else None}
 
 
-@st.cache_data(show_spinner="Sweeping intel quality...")
+@st.cache_data(show_spinner="Sweeping κ...")
 def eval_kappa_sweep(Nt: int, snr_db: float, n_points: int,
                      n_channels: int, seed: int) -> dict:
     ks = np.linspace(0.0, 1.0, n_points)
@@ -202,19 +211,19 @@ def lineplot(x, ys: dict, x_title: str, y_title: str, title: str = ""):
 
 st.sidebar.title("Wiretap Defender")
 st.sidebar.caption(
-    "Alice talks to Bob. Eve listens. Alice splits her power "
-    "between the message and a jamming signal aimed at Eve. "
-    "Three strategies, one question: who keeps the secret best?"
+    "MISO wiretap channel: Alice (multi-antenna transmitter) talks to "
+    "Bob (legitimate receiver). Eve (passive eavesdropper) listens in. "
+    "Alice splits power between the message and artificial noise (AN) "
+    "aimed at Eve. Three schemes, one question: who keeps the secret best?"
 )
 
 with st.sidebar:
     Nt = st.selectbox(
-        "Number of antennas Alice has",
+        "Antennas at Alice  —  Nt",
         options=[2, 4, 8], index=2,
-        help="More antennas = sharper aim at Bob and more room to "
-             "jam Eve without disturbing Bob. (Technical name: Nt.) "
-             "The Smart Agent's edge widens with Nt, since it has more "
-             "channel geometry to exploit per decision."
+        help="Nt = number of transmit antennas. More antennas means a "
+             "sharper beam at Bob and a larger null space (Nt − 1 "
+             "dimensions) for AN. The DQN's edge widens with Nt."
     )
     seed = st.number_input(
         "Scenario seed",
@@ -233,29 +242,35 @@ with st.sidebar:
     st.divider()
     dqn_scheme, dqn_ok, dqn_msg = load_dqn_for(Nt)
     if dqn_ok:
-        st.success(f"Smart Agent ready (trained for {Nt}-antenna setup).")
+        st.success(f"DQN agent loaded (trained at Nt = {Nt}).")
     else:
         st.warning(dqn_msg)
 
-    with st.expander("What's actually happening here?"):
+    with st.expander("Glossary  —  the symbols on this page"):
         st.markdown(
-            "**The setting.** Alice has multiple antennas; Bob and Eve "
-            "have one each. Alice forms a focused beam at Bob and "
-            "sprays artificial noise everywhere else. Bob hears a clean "
-            "signal because the noise is steered to cancel at his "
-            "location; Eve hears signal-plus-noise.\n\n"
-            "**The knob.** rho is the fraction of power on the message "
-            "(the rest is jamming). Pick rho too high — not enough jam, "
-            "Eve hears clearly. Pick it too low — Bob can't even hear "
-            "the message. The right rho depends on the channel.\n\n"
-            "**The catch.** Alice doesn't actually know Eve's channel "
-            "perfectly. We model her intel quality as kappa in [0, 1]: "
-            "1 means perfect, 0 means pure guessing.\n\n"
-            "**The contest.** Three strategies pick rho:\n"
-            "- **Naive** always picks 50/50 (Goel & Negi 2008).\n"
-            "- **Mathematician** trusts the noisy intel and optimises.\n"
-            "- **Smart Agent** is a neural net trained over random "
-            "intel quality — it learned that bad intel is normal."
+            "- **MISO wiretap channel** — multi-antenna Alice, "
+            "single-antenna Bob and Eve.\n"
+            "- **Nt** — number of transmit antennas at Alice.\n"
+            "- **MRT beam (w)** — Alice's matched-filter beam toward Bob, "
+            "*w = hB / ‖hB‖*.\n"
+            "- **Artificial noise (AN, z)** — jamming signal injected into "
+            "the null space of Bob's channel; invisible to Bob, audible "
+            "to Eve.\n"
+            "- **ρ (rho)** — fraction of total power on the message. "
+            "*1 − ρ* goes into AN.\n"
+            "- **hE / ĥE** — Eve's true / estimated channel.\n"
+            "- **κ (kappa)** — CSI quality factor in [0, 1]. "
+            "*κ = 1* is perfect intel, *κ = 0* is pure guessing.\n"
+            "- **Rs** — secrecy rate, the secret bits/s/Hz Alice can send "
+            "while Eve still gets nothing.\n"
+            "- **SNR (dB)** — total transmit SNR P/σ², in decibels."
+        )
+
+    with st.expander("The three schemes in one line each"):
+        st.markdown(
+            f"- **{NAIVE_FULL}** — {NAIVE_GLOSS}.\n"
+            f"- **{MATH_FULL}** — {MATH_GLOSS}.\n"
+            f"- **{DQN_FULL}** — {DQN_GLOSS}."
         )
 
 
@@ -265,9 +280,10 @@ with st.sidebar:
 
 st.title("Wiretap Defender")
 st.markdown(
-    "**One question:** when Alice has only a noisy guess of Eve's channel, "
-    "who keeps the secret best — Naive, Mathematician, or Smart Agent? "
-    "Click through the tabs in order; the **Bad-intel test** is the headline."
+    "**One question:** under noisy CSI on Eve (κ < 1), which scheme "
+    "achieves the highest average secrecy rate Rs — Fixed (ρ = 0.5), "
+    "the Traditional optimiser, or our DQN? "
+    "Click through the tabs in order; tab 3 (the κ sweep) is the headline."
 )
 
 
@@ -276,11 +292,11 @@ st.markdown(
 # ---------------------------------------------------------------------------
 
 tab_live, tab_snr, tab_kappa, tab_outage, tab_geom = st.tabs([
-    "1. Live test",
-    "2. Power story",
-    "3. Bad-intel test  (the headline)",
-    "4. How often it fails",
-    "5. Picture of the setup",
+    "1. Live test  (single point)",
+    "2. SNR sweep  (vs. transmit power)",
+    "3. κ sweep  (THE headline — vs. CSI quality)",
+    "4. Outage probability",
+    "5. Geometry sketch",
 ])
 
 
@@ -288,7 +304,7 @@ tab_live, tab_snr, tab_kappa, tab_outage, tab_geom = st.tabs([
 with tab_live:
     st.subheader("Pick a scenario, see who keeps the secret best.")
     st.markdown(
-        "Set the **transmit power** and the **intel quality**. "
+        "Set the **transmit SNR (P/σ²)** and the **CSI quality κ**. "
         "We run all three strategies on the same batch of fresh "
         "random channels. The bar chart below shows the average "
         "secrecy rate each one achieves. **Higher is better.**"
@@ -297,19 +313,21 @@ with tab_live:
     c1, c2 = st.columns([1, 1])
     with c1:
         snr_db = st.slider(
-            "Transmit power (dB)",
+            "Transmit SNR  —  P/σ² in dB  (Alice's transmit power)",
             0.0, 30.0, 15.0, 0.5,
             key="live_snr",
-            help="How loud Alice transmits, in dB. "
-                 "Higher = louder = more total power available."
+            help="Linear SNR = 10^(SNR_dB / 10). Higher dB = louder "
+                 "transmission. The action space ρ ∈ {0.05, …, 0.85} "
+                 "is allocated against this total power."
         )
     with c2:
         kappa = st.slider(
-            "Alice's intel quality on Eve  (1 = perfect, 0 = guessing)",
+            "CSI quality  —  κ  (1 = perfect intel on Eve, 0 = pure noise)",
             0.0, 1.0, 0.4, 0.05,
             key="live_kappa",
-            help="Technical name: kappa. Controls how noisy Alice's "
-                 "estimate of Eve's channel is."
+            help="κ controls how noisy Alice's estimate of Eve's "
+                 "channel is. Model: ĥE = √κ·hE + √(1−κ)·e, "
+                 "with e ~ CN(0, I). The DQN sees κ in its state."
         )
 
     out = eval_point(Nt, snr_db, kappa, n_chan_live, seed)
@@ -318,15 +336,16 @@ with tab_live:
     rs_dqn = float(out["rs_dqn"].mean()) if out["dqn_ok"] else float("nan")
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric(NAIVE_FULL, f"{rs_fix:.3f}", "secret bits / sec / Hz")
+    m1.metric(NAIVE_FULL, f"{rs_fix:.3f}",
+              "Rs in bits/s/Hz (higher = more secret throughput)")
     m2.metric(MATH_FULL, f"{rs_trd:.3f}",
-              f"{rs_trd - rs_fix:+.3f} vs Naive")
+              f"{rs_trd - rs_fix:+.3f} vs Fixed")
     if out["dqn_ok"]:
         m3.metric(DQN_FULL, f"{rs_dqn:.3f}",
-                  f"{rs_dqn - rs_fix:+.3f} vs Naive")
+                  f"{rs_dqn - rs_fix:+.3f} vs Fixed")
     else:
         m3.metric(DQN_FULL, "—", "no model for this antenna count")
-    m4.metric("Channels tested", f"{n_chan_live}",
+    m4.metric("Monte Carlo channels", f"{n_chan_live}",
               "(toggle slow/smooth in sidebar)")
 
     # Bar plot — winner highlighted
@@ -340,7 +359,7 @@ with tab_live:
                          textposition="outside",
                          textfont=dict(size=14)))
     bar.update_layout(
-        yaxis_title="Average secret bits per second per Hz  (higher = better)",
+        yaxis_title="Average secrecy rate  Rs  (bits/s/Hz)  —  higher is better",
         template="plotly_white",
         height=400, margin=dict(l=10, r=10, t=20, b=10),
         showlegend=False,
@@ -351,24 +370,27 @@ with tab_live:
     if out["dqn_ok"]:
         if rs_dqn >= rs_trd and rs_dqn >= rs_fix - 0.01:
             st.success(
-                f"**Smart Agent wins or ties** at this scenario. "
-                f"Beat Naive by **{rs_dqn - rs_fix:+.3f} bits/s/Hz** and "
-                f"beat Mathematician by **{rs_dqn - rs_trd:+.3f}**. "
-                "Try dragging the intel quality lower to see the gap grow."
+                f"**DQN wins or ties** at this (κ, SNR). "
+                f"Margin over Fixed: **{rs_dqn - rs_fix:+.3f} bits/s/Hz**. "
+                f"Margin over Traditional: **{rs_dqn - rs_trd:+.3f}**. "
+                "Drag κ lower to see the Traditional optimiser fail."
             )
         elif rs_trd < rs_fix:
             st.warning(
-                "**Mathematician is losing to Naive here.** "
-                "This is the failure mode our project is designed around: "
-                "trusting bad intel is worse than ignoring it."
+                "**Traditional is losing to Fixed here.** This is the "
+                "noisy-CSI failure mode: optimising on a corrupt ĥE "
+                "produces a confident-but-wrong ρ. Trusting bad intel "
+                "is worse than ignoring it."
             )
 
     # rho-distribution histograms
-    st.markdown("#### What did each strategy decide to do?")
+    st.markdown("#### Action distribution  —  what ρ did each scheme pick?")
     st.caption(
-        "Each histogram shows how often that strategy picked each rho "
-        "value across the channel batch. rho is the fraction of power "
-        "on the message (1 - rho goes into jamming Eve)."
+        "ρ = fraction of total power placed on the message. "
+        "(1 − ρ) goes into the AN that jams Eve. Each histogram "
+        "shows how often that scheme picked each ρ across the "
+        "Monte Carlo batch. The DQN's action space is "
+        "ρ ∈ {0.05, 0.10, …, 0.85}."
     )
     h1, h2, h3 = st.columns(3)
 
@@ -387,7 +409,7 @@ with tab_live:
     if out["dqn_ok"]:
         _rho_hist(h3, out["rho_dqn"],     DQN_LABEL,        COLORS["dqn"])
     else:
-        h3.info("No Smart Agent model for this antenna count.")
+        h3.info("No DQN model for this antenna count.")
 
 
 # ---- Tab 2: Power story --------------------------------------------------
@@ -400,15 +422,16 @@ with tab_snr:
     )
 
     kappa_snr = st.slider(
-        "Alice's intel quality on Eve  (1 = perfect, 0 = guessing)",
+        "CSI quality  —  κ  (1 = perfect, 0 = pure noise)",
         0.0, 1.0, 0.4, 0.05,
         key="snr_kappa",
     )
     snr_lo, snr_hi = st.slider(
-        "Power range to sweep (dB)",
+        "SNR range to sweep  —  P/σ² in dB",
         -5.0, 35.0, (0.0, 30.0), 1.0,
     )
-    n_points = st.slider("Resolution of the sweep", 5, 25, 11)
+    n_points = st.slider("Sweep resolution  (number of SNR points)",
+                         5, 25, 11)
 
     res = eval_snr_sweep(Nt, kappa_snr, float(snr_lo), float(snr_hi),
                          n_points, n_chan_sweep, seed)
@@ -417,18 +440,17 @@ with tab_snr:
         {NAIVE_FULL:  (res["rs_fixed"], "fixed"),
          MATH_FULL:   (res["rs_traditional"], "traditional"),
          DQN_FULL:    (res["rs_dqn"], "dqn")},
-        "Transmit power (dB)",
-        "Average secret bits / sec / Hz  (higher = better)",
-        title=f"{Nt}-antenna Alice, intel quality = {kappa_snr:.2f}, "
+        "Transmit SNR  P/σ²  (dB)",
+        "Average secrecy rate  Rs  (bits/s/Hz)  —  higher is better",
+        title=f"Nt = {Nt},  κ = {kappa_snr:.2f},  "
               f"{n_chan_sweep} channels per point",
     )
     st.plotly_chart(fig, width="stretch")
     st.info(
-        "Reading the chart: at low intel quality (try kappa = 0.2), "
-        "the green Smart Agent line should sit at or above the grey "
-        "Naive line everywhere, while the red Mathematician line "
-        "dips below grey across the middle of the power range. "
-        "That's the headline story in numbers."
+        "How to read it: at low κ (try κ = 0.2) the green DQN curve "
+        "should sit at or above the grey Fixed line everywhere, while "
+        "the red Traditional curve dips below grey through the middle "
+        "of the SNR range. That dip is the noisy-CSI failure mode."
     )
 
 
@@ -436,17 +458,19 @@ with tab_snr:
 with tab_kappa:
     st.subheader("THE HEADLINE: what happens as Alice's intel gets noisier?")
     st.markdown(
-        "Hold the transmit power fixed and **drag intel quality from "
-        "1 (perfect) down to 0 (pure guessing)**. Watch the lines move."
+        "Hold the transmit SNR fixed and **drag CSI quality κ from "
+        "1 (perfect intel on Eve) down to 0 (pure guessing)**. Watch "
+        "where the Traditional curve crosses below Fixed."
     )
 
     snr_kap = st.slider(
-        "Transmit power (dB)",
+        "Transmit SNR  —  P/σ² in dB",
         0.0, 30.0, 15.0, 0.5,
         key="kap_snr",
     )
     n_points_k = st.slider(
-        "Resolution of the sweep", 5, 21, 11, key="kap_npts"
+        "Sweep resolution  (number of κ points)",
+        5, 21, 11, key="kap_npts"
     )
 
     res = eval_kappa_sweep(Nt, snr_kap, n_points_k, n_chan_sweep, seed)
@@ -455,9 +479,9 @@ with tab_kappa:
         {NAIVE_FULL:  (res["rs_fixed"], "fixed"),
          MATH_FULL:   (res["rs_traditional"], "traditional"),
          DQN_FULL:    (res["rs_dqn"], "dqn")},
-        "Alice's intel quality on Eve  (1 = perfect, 0 = guessing)",
-        "Average secret bits / sec / Hz  (higher = better)",
-        title=f"{Nt}-antenna Alice, transmit power = {snr_kap:.0f} dB, "
+        "CSI quality  κ  (1 = perfect, 0 = pure noise)",
+        "Average secrecy rate  Rs  (bits/s/Hz)  —  higher is better",
+        title=f"Nt = {Nt},  SNR = {snr_kap:.0f} dB,  "
               f"{n_chan_sweep} channels per point",
     )
     st.plotly_chart(fig, width="stretch")
@@ -474,21 +498,20 @@ with tab_kappa:
         if crossover_idx is not None:
             kx = res["kappa"][crossover_idx]
             st.error(
-                f"**Look at this:** the red Mathematician line crosses "
-                f"BELOW the grey Naive baseline near intel quality "
-                f"= {kx:.2f}. From that point onward, "
-                f"**trusting the math actively hurts you** -- you'd be "
-                f"better off ignoring the intel and just splitting "
-                f"power 50/50. The green Smart Agent line never crosses "
-                f"below grey, because it was trained over random intel "
-                f"quality and learned to expect bad intel."
+                f"**Failure mode visible:** the red Traditional curve "
+                f"crosses BELOW the grey Fixed (ρ = 0.5) baseline "
+                f"around κ ≈ {kx:.2f}. From that point on, "
+                f"trusting the optimiser is worse than not optimising at "
+                f"all — its noisy ĥE input pushes it to a confidently "
+                f"wrong ρ. The green DQN curve never crosses below "
+                f"grey because κ is one of its inputs and it learned "
+                f"to retreat to a near-equal split when intel is poor."
             )
         else:
             st.info(
-                "At this power level the gap between strategies is small. "
-                "Try a higher transmit power (try 20+ dB) and the "
-                "Mathematician's collapse at low intel quality becomes "
-                "very visible."
+                "At this SNR the three schemes sit close together. "
+                "Try a higher SNR (20+ dB), where the noisy-CSI "
+                "Traditional collapse at low κ becomes visible."
             )
 
 
@@ -504,13 +527,13 @@ with tab_outage:
     co1, co2 = st.columns(2)
     with co1:
         snr_o = st.slider(
-            "Transmit power (dB)",
+            "Transmit SNR  —  P/σ² in dB",
             0.0, 30.0, 15.0, 0.5,
             key="out_snr",
         )
     with co2:
         kappa_o = st.slider(
-            "Alice's intel quality on Eve",
+            "CSI quality  —  κ",
             0.0, 1.0, 0.4, 0.05,
             key="out_kappa",
         )
@@ -527,33 +550,33 @@ with tab_outage:
         {NAIVE_FULL:  (sop_fix, "fixed"),
          MATH_FULL:   (sop_trd, "traditional"),
          DQN_FULL:    (sop_dqn, "dqn")},
-        "Target rate Alice needs to hit  (bits / sec / Hz)",
-        "Probability of failing to hit it  (lower = better)",
-        title=f"{Nt}-antenna Alice, power = {snr_o:.0f} dB, "
-              f"intel quality = {kappa_o:.2f}, "
+        "Target secrecy rate  R₀  (bits/s/Hz)",
+        "Secrecy outage probability  SOP(R₀) = Pr[Rs < R₀]",
+        title=f"Nt = {Nt},  SNR = {snr_o:.0f} dB,  κ = {kappa_o:.2f},  "
               f"{n_chan_live} channels",
     )
     fig.update_yaxes(range=[-0.02, 1.02])
     st.plotly_chart(fig, width="stretch")
 
     target = st.slider(
-        "Pick a target rate to read off failure probability",
+        "Target rate R₀ to read off SOP",
         0.0, 8.0, 2.0, 0.1,
     )
     j = int(np.argmin(np.abs(r0 - target)))
     cm1, cm2, cm3 = st.columns(3)
-    cm1.metric(f"{NAIVE_LABEL}: fails at R={r0[j]:.2f}",
+    cm1.metric(f"{NAIVE_LABEL}: SOP at R₀ = {r0[j]:.2f}",
                f"{sop_fix[j]:.1%}")
-    cm2.metric(f"{MATH_LABEL}: fails at R={r0[j]:.2f}",
+    cm2.metric(f"{MATH_LABEL}: SOP at R₀ = {r0[j]:.2f}",
                f"{sop_trd[j]:.1%}")
     if sop_dqn is not None:
-        cm3.metric(f"{DQN_LABEL}: fails at R={r0[j]:.2f}",
+        cm3.metric(f"{DQN_LABEL}: SOP at R₀ = {r0[j]:.2f}",
                    f"{sop_dqn[j]:.1%}")
 
     st.caption(
-        "Reading the metrics: pick a target rate (say 3 bits/s/Hz). "
-        "The percentage shows how often each strategy fails to deliver "
-        "at least that much secret rate over the channel set."
+        "Secrecy outage probability (SOP) is the fraction of channels "
+        "on which the achieved Rs falls short of the target R₀. "
+        "Lower = better. The DQN curve sits to the right of Traditional, "
+        "i.e. for a given SOP it delivers a higher target rate."
     )
 
 
@@ -635,15 +658,17 @@ with tab_geom:
     st.plotly_chart(fig, width="stretch")
 
     g1, g2, g3 = st.columns(3)
-    g1.metric(f"{NAIVE_LABEL} picks rho", "0.50")
-    g2.metric(f"{MATH_LABEL} picks rho", f"{rho_trad:.3f}")
+    g1.metric(f"{NAIVE_LABEL}  picks ρ", "0.50")
+    g2.metric(f"{MATH_LABEL}  picks ρ", f"{rho_trad:.3f}")
     if dqn_ok:
-        g3.metric(f"{DQN_LABEL} picks rho",  f"{rho_d:.3f}")
+        g3.metric(f"{DQN_LABEL}  picks ρ",  f"{rho_d:.3f}")
     else:
-        g3.metric(f"{DQN_LABEL} picks rho",  "—")
+        g3.metric(f"{DQN_LABEL}  picks ρ",  "—")
 
     st.caption(
-        "The green arrow is Alice's beam toward Bob. The faint red "
-        "arrow shows where some signal still leaks toward Eve -- that's "
-        "what the artificial noise is designed to drown out."
+        "The green arrow is Alice's MRT beam w = hB / ‖hB‖, "
+        "pointed at Bob. The faint red arrow indicates the residual "
+        "signal leakage toward Eve via |hE^H w|² — exactly what "
+        "the AN component (1 − ρ) of the transmit power is designed "
+        "to drown out."
     )
