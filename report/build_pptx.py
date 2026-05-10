@@ -242,43 +242,39 @@ add_bullets(s, 0.6, 2.0, 12.3, 5.0, [
 add_footer(s, 2)
 
 
-# ---- Slide 3: System model (visual + ONE equation) -------------------
+# ---- Slide 3: System model (geometry sketch + ONE equation) ---------
 s = add_blank(prs)
-add_title_band(s, "The setting  —  MISO wiretap channel")
+add_title_band(s, "The setting  —  MISO wiretap channel",
+               "Alice (multi-antenna), Bob (legitimate), Eve (eavesdropper)")
 
-# Three boxes: Alice / Bob / Eve
-add_card(s, 0.6, 1.4, 4.0, 2.2, fill=SOFT_NAVY, border=NAVY)
-add_textbox(s, 0.6, 1.55, 4.0, 0.5, "Alice",
-            size=24, bold=True, color=NAVY, align=PP_ALIGN.CENTER)
-add_textbox(s, 0.7, 2.1, 3.8, 1.5,
-            "Multi-antenna transmitter  (Nt antennas).\n"
-            "Beams data toward Bob, sprays AN elsewhere.",
-            size=14, color=DARK, align=PP_ALIGN.CENTER)
+# Geometry sketch — gives the audience a literal picture before any math
+add_figure(s, "14_geometry_sketch.png",
+           left=0.4, top=1.1, width=8.6)
 
-add_card(s, 5.0, 1.4, 4.0, 2.2, fill=SOFT_GRN, border=GREEN)
-add_textbox(s, 5.0, 1.55, 4.0, 0.5, "Bob",
-            size=24, bold=True, color=GREEN, align=PP_ALIGN.CENTER)
-add_textbox(s, 5.1, 2.1, 3.8, 1.5,
-            "Legitimate receiver, single antenna.\n"
-            "Hears the signal cleanly  —  AN cancels at his location.",
-            size=14, color=DARK, align=PP_ALIGN.CENTER)
+# Right column: the imperfect-CSI equation + κ legend
+add_textbox(s, 9.3, 1.3, 3.7, 0.5,
+            "Alice's intel on Eve is noisy:",
+            size=14, bold=True, color=NAVY)
+add_eq_image(s, "eq04_csi", left=9.0, top=1.85, width=4.2)
+add_card(s, 9.3, 3.4, 3.7, 2.5, fill=SOFT_NAVY, border=NAVY)
+add_textbox(s, 9.45, 3.55, 3.4, 0.5,
+            "κ  —  CSI quality",
+            size=15, bold=True, color=NAVY)
+add_textbox(s, 9.45, 4.05, 3.4, 1.7,
+            "κ = 1  →  perfect intel\n"
+            "κ = 0.4  →  realistic\n            (our default)\n"
+            "κ = 0  →  pure guessing",
+            size=12, color=DARK)
 
-add_card(s, 9.4, 1.4, 3.4, 2.2, fill=SOFT_RED, border=RED)
-add_textbox(s, 9.4, 1.55, 3.4, 0.5, "Eve",
-            size=24, bold=True, color=RED, align=PP_ALIGN.CENTER)
-add_textbox(s, 9.5, 2.1, 3.2, 1.5,
-            "Passive eavesdropper.\n"
-            "Hears signal-plus-AN.  Trying to decode anyway.",
-            size=14, color=DARK, align=PP_ALIGN.CENTER)
-
-# The one equation that matters most: imperfect CSI model
-add_textbox(s, 0.6, 4.0, 12.3, 0.5,
-            "Alice's intel on Eve is noisy.  We model it as:",
-            size=18, color=DARK)
-add_eq_image(s, "eq04_csi", left=2.5, top=4.6, width=8.4)
-add_textbox(s, 0.6, 6.4, 12.3, 0.4,
-            "κ = 1  →  perfect intel        κ = 0  →  pure guessing",
-            size=18, italic=True, color=NAVY, align=PP_ALIGN.CENTER)
+# Bottom strip with axis-style explanation of the picture
+add_textbox(s, 0.4, 6.3, 8.6, 0.4,
+            "Green wedge = MRT beam at Bob.   "
+            "Red hatched region = artificial-noise spray.",
+            size=12, italic=True, color=DARK, align=PP_ALIGN.CENTER)
+add_textbox(s, 0.4, 6.75, 8.6, 0.4,
+            "The dial ρ controls how power is split between green "
+            "(message) and red (jamming).",
+            size=12, italic=True, color=DARK, align=PP_ALIGN.CENTER)
 
 add_footer(s, 3)
 
@@ -442,11 +438,11 @@ add_footer(s, 7)
 s = add_blank(prs)
 add_title_band(s, "Training  —  one decision per channel, 7000 channels")
 
-add_figure(s, "03_dqn_training_curve.png",
+add_figure(s, "13_training_curve_clean.png",
            left=0.5, top=1.2, width=7.4)
 add_textbox(s, 0.5, 6.55, 7.4, 0.4,
-            "Running average reward climbs as ε → 0 and the policy "
-            "stabilises.",
+            "Smoothed running-average reward climbs as ε decays to "
+            "0.05; policy stabilises in the second half.",
             size=11, italic=True, color=GREY, align=PP_ALIGN.CENTER)
 
 # Three "stat" cards on the right
