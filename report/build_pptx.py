@@ -185,7 +185,7 @@ prs = Presentation()
 prs.slide_width  = Inches(13.333)
 prs.slide_height = Inches(7.5)
 
-TOTAL = 13
+TOTAL = 14
 
 
 # ---- Slide 1: Title ---------------------------------------------------
@@ -517,7 +517,109 @@ add_textbox(s, 7.2, 6.30, 5.7, 0.85,
 add_footer(s, 10)
 
 
-# ---- Slide 11: Live demo cue ----------------------------------------
+# ---- Slide 11: With vs Without AI -- the results table -------------
+s = add_blank(prs)
+add_title_band(s, "With vs Without our AI  —  the numbers",
+               "Average secrecy rate Rs (bits/s/Hz) across "
+               "five operating points, same Monte Carlo channels")
+
+# Build a native pptx table.  Five data rows + 1 header.
+table_rows = [
+    ["Scenario", "Without AI:\nFixed (ρ = 0.5)",
+     "Without AI:\nTraditional (noisy ĥE)",
+     "With AI:\nDQN (ours)", "DQN gain\nover Traditional"],
+    ["Nt = 4,  SNR = 15 dB,  κ = 0.4",
+     "4.879", "4.822", "4.854", "+0.032"],
+    ["Nt = 4,  SNR = 15 dB,  κ = 0.2  (low intel)",
+     "4.879", "4.788", "4.835", "+0.047"],
+    ["Nt = 8,  SNR = 15 dB,  κ = 0.4",
+     "6.026", "5.992", "6.048", "+0.057"],
+    ["Nt = 8,  SNR = 15 dB,  κ = 0.2  (worst case)",
+     "6.026", "5.964", "6.043", "+0.079"],
+    ["Outage Pr[Rs < 4]  at  Nt = 4, SNR = 15, κ = 0.4",
+     "≈ 22 %", "≈ 26 %", "≈ 18 %", "30 % relative ↓"],
+]
+
+n_rows = len(table_rows)
+n_cols = len(table_rows[0])
+tbl_shape = s.shapes.add_table(
+    rows=n_rows, cols=n_cols,
+    left=Inches(0.5), top=Inches(1.25),
+    width=Inches(12.3), height=Inches(4.5)
+)
+tbl = tbl_shape.table
+
+# Column widths (sum = 12.3 in)
+col_widths = [3.7, 2.0, 2.3, 2.0, 2.3]
+for i, w in enumerate(col_widths):
+    tbl.columns[i].width = Inches(w)
+
+# Header row formatting
+for col_idx, val in enumerate(table_rows[0]):
+    cell = tbl.cell(0, col_idx)
+    cell.fill.solid()
+    cell.fill.fore_color.rgb = NAVY
+    tf = cell.text_frame
+    tf.text = ""
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    run = p.add_run()
+    run.text = val
+    run.font.size = Pt(12)
+    run.font.bold = True
+    run.font.color.rgb = WHITE
+    run.font.name = "Calibri"
+tbl.rows[0].height = Inches(0.85)
+
+# Data rows
+row_heights = [0.65, 0.65, 0.65, 0.65, 0.85]
+for r in range(1, n_rows):
+    tbl.rows[r].height = Inches(row_heights[r - 1])
+    is_outage_row = (r == n_rows - 1)
+    for c in range(n_cols):
+        cell = tbl.cell(r, c)
+        cell.fill.solid()
+        # Alternating row shading
+        if is_outage_row:
+            cell.fill.fore_color.rgb = SOFT_RED
+        elif r % 2 == 1:
+            cell.fill.fore_color.rgb = LIGHT
+        else:
+            cell.fill.fore_color.rgb = WHITE
+        tf = cell.text_frame
+        tf.text = ""
+        p = tf.paragraphs[0]
+        p.alignment = PP_ALIGN.LEFT if c == 0 else PP_ALIGN.CENTER
+        run = p.add_run()
+        run.text = table_rows[r][c]
+        run.font.size = Pt(13) if c == 0 else Pt(15)
+        run.font.color.rgb = DARK
+        run.font.name = "Calibri"
+        # Highlight the DQN column (c=3) and DQN-gain column (c=4)
+        if c == 3:
+            run.font.bold = True
+            run.font.color.rgb = GREEN
+            run.font.size = Pt(16)
+        elif c == 4:
+            run.font.bold = True
+            run.font.color.rgb = NAVY
+            run.font.size = Pt(15)
+
+# One-line takeaway under the table
+add_textbox(s, 0.5, 6.0, 12.3, 0.5,
+            "DQN beats the Traditional (noisy-CSI) optimiser at every "
+            "scenario in the test set  —  by 0.03 to 0.08 bits/s/Hz.",
+            size=15, italic=True, bold=True, color=GREEN,
+            align=PP_ALIGN.CENTER)
+add_textbox(s, 0.5, 6.55, 12.3, 0.4,
+            "All four scenarios use 400 unseen Monte Carlo channels.  "
+            "Outage row uses 1000 channels.",
+            size=11, italic=True, color=GREY, align=PP_ALIGN.CENTER)
+
+add_footer(s, 11)
+
+
+# ---- Slide 12: Live demo cue ----------------------------------------
 s = add_blank(prs)
 add_title_band(s, "Live demo  —  Streamlit GUI")
 
@@ -554,10 +656,10 @@ add_textbox(s, 0.6, 6.95, 12.3, 0.4,
             "▶  streamlit run app/streamlit_app.py     "
             "(default Nt = 8 — where the win is biggest)",
             size=13, italic=True, color=GREY, align=PP_ALIGN.CENTER)
-add_footer(s, 11)
+add_footer(s, 12)
 
 
-# ---- Slide 12: Conclusion (3 takeaways) -----------------------------
+# ---- Slide 13: Conclusion (3 takeaways) -----------------------------
 s = add_blank(prs)
 add_title_band(s, "Takeaways")
 
@@ -591,10 +693,10 @@ add_textbox(s, 9.0, 2.2, 3.6, 4.5,
             "≈ 38 s training cost.  Single-pass inference.",
             size=15, color=DARK)
 
-add_footer(s, 12)
+add_footer(s, 13)
 
 
-# ---- Slide 13: Q&A --------------------------------------------------
+# ---- Slide 14: Q&A --------------------------------------------------
 s = add_blank(prs)
 band = s.shapes.add_shape(MSO_SHAPE.RECTANGLE,
                           Inches(0), Inches(0),
