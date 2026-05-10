@@ -242,39 +242,33 @@ add_bullets(s, 0.6, 2.0, 12.3, 5.0, [
 add_footer(s, 2)
 
 
-# ---- Slide 3: System model (geometry sketch + ONE equation) ---------
+# ---- Slide 3: System model (geometry sketch hero + clean math row) --
 s = add_blank(prs)
 add_title_band(s, "The setting  —  MISO wiretap channel",
                "Alice (multi-antenna), Bob (legitimate), Eve (eavesdropper)")
 
-# Geometry sketch — gives the audience a literal picture before any math
+# Hero: the geometry sketch, centred, with breathing room.
 add_figure(s, "14_geometry_sketch.png",
-           left=0.4, top=1.1, width=8.6)
+           left=1.6, top=1.05, width=10.1)
 
-# Right column: the imperfect-CSI equation + κ legend
-add_textbox(s, 9.3, 1.3, 3.7, 0.5,
-            "Alice's intel on Eve is noisy:",
-            size=14, bold=True, color=NAVY)
-add_eq_image(s, "eq04_csi", left=9.0, top=1.85, width=4.2)
-add_card(s, 9.3, 3.4, 3.7, 2.5, fill=SOFT_NAVY, border=NAVY)
-add_textbox(s, 9.45, 3.55, 3.4, 0.5,
-            "κ  —  CSI quality",
-            size=15, bold=True, color=NAVY)
-add_textbox(s, 9.45, 4.05, 3.4, 1.7,
-            "κ = 1  →  perfect intel\n"
-            "κ = 0.4  →  realistic\n            (our default)\n"
-            "κ = 0  →  pure guessing",
+# Single horizontal row at the bottom: math card on the left,
+# kappa legend card on the right. Plenty of vertical and horizontal
+# spacing so nothing crowds anything else.
+add_card(s, 0.5, 5.65, 6.4, 1.65, fill=SOFT_NAVY, border=NAVY)
+add_textbox(s, 0.65, 5.75, 6.1, 0.4,
+            "Imperfect CSI model",
+            size=13, bold=True, color=NAVY)
+add_eq_image(s, "eq04_csi", left=0.85, top=6.20, width=5.7)
+
+add_card(s, 7.1, 5.65, 5.7, 1.65, fill=SOFT_GRN, border=GREEN)
+add_textbox(s, 7.25, 5.75, 5.4, 0.4,
+            "κ  —  CSI quality dial",
+            size=13, bold=True, color=GREEN)
+add_textbox(s, 7.25, 6.20, 5.4, 1.0,
+            "κ = 1  perfect intel    ·    "
+            "κ = 0.4  our default    ·    "
+            "κ = 0  pure noise",
             size=12, color=DARK)
-
-# Bottom strip with axis-style explanation of the picture
-add_textbox(s, 0.4, 6.3, 8.6, 0.4,
-            "Green wedge = MRT beam at Bob.   "
-            "Red hatched region = artificial-noise spray.",
-            size=12, italic=True, color=DARK, align=PP_ALIGN.CENTER)
-add_textbox(s, 0.4, 6.75, 8.6, 0.4,
-            "The dial ρ controls how power is split between green "
-            "(message) and red (jamming).",
-            size=12, italic=True, color=DARK, align=PP_ALIGN.CENTER)
 
 add_footer(s, 3)
 
