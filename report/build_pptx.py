@@ -314,18 +314,40 @@ add_card_text(s, 6.7, 1.5, 6.1, 5.5,
 add_footer(s, 4)
 
 
-# ---- Slide 5: The noisy-CSI failure (FULL-BLEED FIGURE) --------------
+# ---- Slide 5: BEFORE vs AFTER our AI (full-bleed comparison) ---------
 s = add_blank(prs)
-add_title_band(s, "The failure mode  —  trusting bad intel hurts")
+add_title_band(s, "BEFORE vs AFTER our AI  —  same channels, same κ",
+               "Left: only existing schemes.  Right: with DQN added.")
 
-add_figure(s, "04_three_scheme_comparison.png",
-           left=2.4, top=1.15, width=8.4)
-add_textbox(s, 0.6, 6.45, 12.3, 0.85,
-            "At κ = 0.4 the red Traditional curve drops BELOW the "
-            "grey Fixed baseline.  The optimiser is doing worse than "
-            "doing nothing.  The green DQN curve  (next slides) "
-            "is the fix.",
-            size=15, italic=True, color=DARK, align=PP_ALIGN.CENTER)
+# Hero figure: the new before/after two-panel comparison
+add_figure(s, "12_before_after.png",
+           left=0.3, top=1.15, width=12.7)
+
+# Axis-callout strip below the figure — large, explicit
+ax_band = s.shapes.add_shape(
+    MSO_SHAPE.RECTANGLE,
+    Inches(0.5), Inches(6.5), Inches(12.3), Inches(0.55))
+ax_band.line.color.rgb = NAVY
+ax_band.line.width = Pt(0.75)
+ax_band.fill.solid()
+ax_band.fill.fore_color.rgb = SOFT_NAVY
+ax_band.shadow.inherit = False
+
+add_textbox(s, 0.7, 6.55, 6.0, 0.45,
+            "X axis  →  Transmit power, SNR in dB  (0 to 30)",
+            size=13, bold=True, color=NAVY, align=PP_ALIGN.LEFT)
+add_textbox(s, 6.5, 6.55, 6.3, 0.45,
+            "Y axis  →  Average secrecy rate  Rs (bits/s/Hz)  —  "
+            "higher is better",
+            size=13, bold=True, color=NAVY, align=PP_ALIGN.LEFT)
+
+# Story strip under the axis row
+add_textbox(s, 0.5, 7.10, 12.3, 0.35,
+            "Left panel: Traditional (red) drops BELOW Fixed (grey) — "
+            "trusting noisy intel hurts.    "
+            "Right panel: DQN (green) holds at or above Fixed everywhere.",
+            size=12, italic=True, color=DARK, align=PP_ALIGN.CENTER)
+
 add_footer(s, 5)
 
 
@@ -458,12 +480,22 @@ add_title_band(s, "Headline result  —  three schemes, same channels",
                "κ = 0.4, Nt = 4, 400 unseen channels per SNR point")
 
 add_figure(s, "04_three_scheme_comparison.png",
-           left=2.4, top=1.2, width=8.4)
-add_textbox(s, 0.6, 6.5, 12.3, 0.8,
+           left=2.6, top=1.2, width=8.0)
+
+# Explicit axis-callout strip
+add_textbox(s, 0.5, 6.05, 6.2, 0.4,
+            "X axis  →  Transmit SNR (dB)",
+            size=13, bold=True, color=NAVY, align=PP_ALIGN.LEFT)
+add_textbox(s, 6.5, 6.05, 6.3, 0.4,
+            "Top Y  →  absolute Rs (bits/s/Hz);   "
+            "Bottom Y  →  gain over Fixed",
+            size=13, bold=True, color=NAVY, align=PP_ALIGN.LEFT)
+
+add_textbox(s, 0.6, 6.55, 12.3, 0.8,
             "DQN (green) sits at or above the Fixed baseline (grey) "
             "everywhere.  Traditional (red, dashed) drops below.  "
             "Same model, no retuning per SNR.",
-            size=14, italic=True, color=DARK, align=PP_ALIGN.CENTER)
+            size=13, italic=True, color=DARK, align=PP_ALIGN.CENTER)
 add_footer(s, 9)
 
 
@@ -471,17 +503,27 @@ add_footer(s, 9)
 s = add_blank(prs)
 add_title_band(s, "Robustness  —  the κ sweep and the outage curve")
 
-add_figure(s, "06_kappa_sweep.png", left=0.4, top=1.2, width=6.6)
-add_figure(s, "08_secrecy_outage.png", left=7.3, top=1.2, width=5.7)
+add_figure(s, "06_kappa_sweep.png", left=0.4, top=1.2, width=6.4)
+add_figure(s, "08_secrecy_outage.png", left=7.2, top=1.2, width=5.7)
 
-add_textbox(s, 0.4, 6.5, 6.6, 0.7,
+# Per-panel axis callouts
+add_textbox(s, 0.4, 5.85, 6.4, 0.4,
+            "X →  CSI quality κ ∈ [0, 1]    "
+            "Y →  Rs (bits/s/Hz)",
+            size=11, bold=True, color=NAVY, align=PP_ALIGN.CENTER)
+add_textbox(s, 7.2, 5.85, 5.7, 0.4,
+            "X →  target rate R₀    "
+            "Y →  outage P(Rs < R₀)",
+            size=11, bold=True, color=NAVY, align=PP_ALIGN.CENTER)
+
+add_textbox(s, 0.4, 6.30, 6.4, 0.85,
             "Drag κ from 1 → 0.  Traditional collapses below "
-            "Fixed near κ = 0.6.  DQN never does.",
-            size=13, italic=True, color=DARK, align=PP_ALIGN.CENTER)
-add_textbox(s, 7.3, 6.5, 5.7, 0.7,
+            "Fixed near κ ≈ 0.6.  DQN never does.",
+            size=12, italic=True, color=DARK, align=PP_ALIGN.CENTER)
+add_textbox(s, 7.2, 6.30, 5.7, 0.85,
             "Outage at the same scenario.  At R₀ = 4 bits/s/Hz, "
             "DQN's outage ≈ 18% vs Traditional's ≈ 26%.",
-            size=13, italic=True, color=DARK, align=PP_ALIGN.CENTER)
+            size=12, italic=True, color=DARK, align=PP_ALIGN.CENTER)
 add_footer(s, 10)
 
 

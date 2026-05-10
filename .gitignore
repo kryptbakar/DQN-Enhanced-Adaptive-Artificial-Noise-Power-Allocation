@@ -29,6 +29,9 @@ figures/*.png
 # Exception: app/demo.html embeds figure 04 -- keep that one tracked so
 # GitHub Pages can serve it.
 !figures/04_three_scheme_comparison.png
+# Exception: figure 12 (the before/after comparison) is embedded in
+# report/slides.pptx and is therefore part of the tracked deliverable.
+!figures/12_before_after.png
 
 # --- Project: trained models (large) -- but keep the per-Nt headline weights ---
 models/*.keras
