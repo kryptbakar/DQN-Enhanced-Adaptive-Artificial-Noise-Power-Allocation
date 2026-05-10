@@ -1717,6 +1717,28 @@ add_qa(doc,
     "adaptive Eve would be a different (zero-sum game) problem; "
     "we mention it as future work.")
 
+add_qa(doc,
+    "If you have to manually change the SNR in the demo, "
+    "what is the AI actually doing in this system?",
+    "The sliders set the SCENARIO; the AI picks the ACTION.  "
+    "SNR is a hardware setting (how loud Alice transmits), and κ "
+    "is a property of Alice's feedback channel (how good her "
+    "intel on Eve is).  Alice doesn't decide either of those — "
+    "they're inputs to the problem.  The AI's only job is to "
+    "pick ρ, the power split between message and AN, from 17 "
+    "discrete values.  When we drag a slider in the demo, behind "
+    "the scenes the app generates 600 fresh random channels and "
+    "for EACH channel the AI takes a 7-number state vector "
+    "(which embeds the current SNR, κ, channel magnitudes, "
+    "alignment), runs one forward pass through the Q-network, "
+    "and outputs a ρ.  The displayed bars are averages over "
+    "those 600 channel-by-channel decisions.  Sliding the slider "
+    "doesn't replace the AI; it just asks the AI a different "
+    "question 600 times in a row.  Think of a thermostat — the "
+    "outside temperature is set by the weather, the desired "
+    "temperature by the user, and the thermostat decides the "
+    "heating rate given those two inputs.  Same idea.")
+
 
 add_h2(doc, "Medium-difficulty technical questions")
 
