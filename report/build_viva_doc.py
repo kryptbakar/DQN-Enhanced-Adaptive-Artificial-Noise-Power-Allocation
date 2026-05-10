@@ -27,6 +27,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FIG_DIR   = os.path.join(REPO_ROOT, "figures")
 OUT_PATH  = os.path.join(REPO_ROOT, "report", "viva_prep.docx")
 
 
@@ -76,6 +77,25 @@ def add_callout(doc, text):
     run = p.add_run(text)
     run.italic = True
     run.font.size = Pt(11)
+
+
+def add_figure(doc, fname, caption, width_inches=5.8):
+    """Embed a figure with an italic caption underneath."""
+    img_path = os.path.join(FIG_DIR, fname)
+    if not os.path.isfile(img_path):
+        print(f"[WARN] missing figure: {img_path}")
+        p = doc.add_paragraph()
+        p.add_run(f"[missing figure: {fname}]").italic = True
+        return
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.add_run().add_picture(img_path, width=Inches(width_inches))
+    cap = doc.add_paragraph()
+    cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = cap.add_run(caption)
+    run.italic = True
+    run.font.size = Pt(9)
+    run.font.color.rgb = GREY
 
 
 def add_qa(doc, question, answer):
@@ -134,7 +154,8 @@ team_p.add_run(
 # Reading-time table
 rt_p = doc.add_paragraph()
 rt_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-rtr = rt_p.add_run("\nFront-to-back read time: ~25 minutes")
+rtr = rt_p.add_run("\nFront-to-back read time: ~40 minutes "
+                   "(includes all 11 result figures + Q&A bank)")
 rtr.font.size = Pt(10)
 rtr.italic = True
 rtr.font.color.rgb = GREY
@@ -797,8 +818,490 @@ add_bullets(doc, [
 ])
 
 
-# === PART G: Why the DQN wins ========================================
-add_h1(doc, "PART G  —  Three intuitions for why the DQN wins")
+# === PART G: The figures, every one explained =======================
+add_h1(doc, "PART G  —  The figures, every one explained")
+add_para(doc,
+    "We have eleven result figures.  This section walks through each "
+    "one in plain language: what it shows, what to look at, and what "
+    "sir is most likely to ask about it.  The figure number in this "
+    "doc matches the figure number in the report.",
+    italic=True)
+add_para(doc,
+    "If you can describe what every figure shows in two sentences, "
+    "you are over-prepared for the figure-reading part of the viva.")
+
+
+# --- Figure 1: Single channel sweep
+add_h2(doc, "Figure 1  —  Rs(ρ) for one channel  (sanity check on the math)")
+add_figure(doc, "01_single_channel_sweep.png",
+           "Figure 1: secrecy rate as a function of ρ for a single "
+           "random channel realisation, Nt = 4, SNR = 15 dB.")
+add_para(doc, "What you're looking at:", bold=True)
+add_para(doc,
+    "We picked ONE random channel pair (one hB, one hE) and "
+    "computed Rs for every possible value of ρ from 0 to 1.  The "
+    "x-axis is ρ; the y-axis is Rs in bits/s/Hz.")
+add_para(doc, "What's on each axis:")
+add_bullets(doc, [
+    "x-axis: ρ ∈ (0, 1) — the dial setting.  0 = all power on AN, "
+    "1 = all power on signal.",
+    "y-axis: Rs in bits/s/Hz — the secrecy rate achieved at that ρ.",
+])
+add_para(doc, "The story this tells:", bold=True)
+add_para(doc,
+    "The curve has a clean concave bump with the peak somewhere "
+    "between 0.4 and 0.7.  This is what makes the optimisation "
+    "problem well-posed — there IS a single best ρ for each channel, "
+    "and it's interior, not at the boundary.  The Fixed scheme's "
+    "ρ = 0.5 sits close to but not exactly at the peak.")
+add_para(doc, "If sir asks…", bold=True)
+add_qa(doc,
+    "Why is this curve concave?",
+    "Because Rs is the difference of two log functions: log₂(1+γB) "
+    "minus log₂(1+γE).  γB grows linearly with ρ; γE depends on ρ "
+    "through both numerator (signal-at-Eve) and denominator "
+    "(AN-at-Eve), so it has a more complex shape.  The combination "
+    "happens to be concave for typical channels, with the peak in "
+    "the interior.")
+add_qa(doc,
+    "Why doesn't it start at zero on the left?",
+    "Because at ρ slightly above 0 there is barely any signal but "
+    "still enough to give Bob a non-trivial rate.  Eve's SINR is "
+    "also tiny because she's drowning in AN.  As ρ grows, Bob's "
+    "rate grows faster than Eve's until the peak, then Eve catches "
+    "up and we descend.")
+
+
+# --- Figure 2: Validation
+add_h2(doc, "Figure 2  —  Sanity check at perfect intel  (κ = 1)")
+add_figure(doc, "02_validation_scheme1_vs_scheme2.png",
+           "Figure 2: average Rs vs SNR for Fixed and Traditional at "
+           "κ = 1.  Monte Carlo over 500 channels per SNR point.")
+add_para(doc, "What this is for:", bold=True)
+add_para(doc,
+    "Before claiming anything interesting, we have to prove the "
+    "simulator works.  At κ = 1 (perfect intel), the Traditional "
+    "optimiser must beat the Fixed baseline at every SNR.  If it "
+    "didn't, our code would have a bug.  This figure is the "
+    "'we're not lying' figure.")
+add_para(doc, "Axes:")
+add_bullets(doc, [
+    "x-axis: transmit SNR in dB, from 0 to 30.",
+    "y-axis: average Rs over 500 random channels at each SNR.",
+])
+add_para(doc, "The story:", bold=True)
+add_para(doc,
+    "Both curves climb with SNR (more power → more secret bits). "
+    "The blue Traditional curve sits cleanly above the grey Fixed "
+    "curve at every SNR, with the gap widening as SNR grows.  "
+    "Conclusion: the optimiser does its job when the input is "
+    "trustworthy.  Proves the scheme isn't broken.")
+add_para(doc, "If sir asks…", bold=True)
+add_qa(doc,
+    "Why does the gap grow with SNR?",
+    "At high SNR, the equal split ρ = 0.5 becomes increasingly "
+    "wasteful — more of the budget could go on the message because "
+    "Bob has so much headroom.  The optimiser shifts ρ accordingly. "
+    "At low SNR there isn't much room to manoeuvre, so Fixed and "
+    "Traditional are closer.")
+
+
+# --- Figure 3: Training curve
+add_h2(doc, "Figure 3  —  Training curve  (the DQN learning over time)")
+add_figure(doc, "03_dqn_training_curve.png",
+           "Figure 3: per-episode Rs (faint blue) and 100-episode "
+           "running average (red) over the 7000 training episodes "
+           "at Nt = 4.  Bottom panel: ε decay.")
+add_para(doc, "What this is for:", bold=True)
+add_para(doc,
+    "Evidence that the DQN actually learnt something.  The "
+    "x-axis is the episode number (1 to 7000); the y-axis is the "
+    "secrecy rate the agent achieved on each episode.")
+add_para(doc, "Axes:")
+add_bullets(doc, [
+    "Top y-axis: Rs achieved on each episode.",
+    "Top x-axis: episode number.",
+    "Bottom y-axis: ε, the exploration probability.",
+    "Bottom x-axis: same episode number.",
+])
+add_para(doc, "The story:", bold=True)
+add_para(doc,
+    "The faint blue cloud of per-episode rewards stays noisy because "
+    "every episode is a fresh random channel + random κ + random "
+    "SNR.  The red running-average line is what matters: it climbs "
+    "during training as the policy improves.  Once ε reaches 0.05 "
+    "(around episode 4200), the curve stabilises.")
+add_para(doc, "If sir asks…", bold=True)
+add_qa(doc,
+    "Why is the per-episode reward so spiky?",
+    "Because every episode samples a totally fresh random scenario. "
+    "An easy episode (high SNR, high κ, favourable channel "
+    "geometry) can give Rs = 8; a hard episode (low SNR, low κ, "
+    "Eve aligned with Bob) can give Rs = 1.  The agent's POLICY "
+    "is converging; the per-episode rewards stay noisy because "
+    "the underlying problem is randomised by design.")
+add_qa(doc,
+    "How do you know it converged?",
+    "The 100-episode running average flattens during the last "
+    "3000 episodes.  Also, evaluating on a held-out seed (2026) "
+    "gives consistent numbers across re-runs.")
+
+
+# --- Figure 4: Headline three-scheme comparison
+add_h2(doc, "Figure 4  —  HEADLINE three-scheme comparison  "
+              "(the most important figure)")
+add_figure(doc, "04_three_scheme_comparison.png",
+           "Figure 4: average Rs vs SNR at κ = 0.4, Nt = 4.  "
+           "Top panel: absolute Rs.  Bottom panel: gain over the "
+           "Fixed baseline.")
+add_para(doc, "What this is:", bold=True)
+add_para(doc,
+    "THE plot.  This is the figure to put on screen if you only "
+    "have time for one.  Every claim in the abstract maps to "
+    "something visible here.")
+add_para(doc, "Axes:")
+add_bullets(doc, [
+    "x-axis: transmit SNR in dB.",
+    "Top y-axis: absolute average Rs over 400 unseen channels.",
+    "Bottom y-axis: each curve MINUS the Fixed baseline.  So Fixed "
+    "is at zero by definition; positive = better than Fixed, "
+    "negative = worse.",
+])
+add_para(doc, "The story  (use this exact narration on demo day):",
+         bold=True)
+add_bullets(doc, [
+    "The grey line is Fixed (ρ = 0.5).  Reference baseline.",
+    "The blue dashed line is Traditional WITH PERFECT CSI (κ = 1). "
+    "Sits above grey at every SNR — an upper bound.",
+    "The red dashed line is Traditional WITH NOISY CSI (κ = 0.4). "
+    "Drops BELOW grey across most of the SNR range.  This is the "
+    "noisy-CSI failure mode.",
+    "The green line is OUR DQN.  Sits at or above grey "
+    "everywhere, recovering a clear chunk of the perfect-CSI gap.",
+])
+add_para(doc, "If sir asks…", bold=True)
+add_qa(doc,
+    "Why does the red curve dip below grey?",
+    "Because Traditional trusts ĥE blindly.  At κ = 0.4 the "
+    "estimate is mostly noise, so the optimiser confidently picks "
+    "a ρ that's optimal for the noisy estimate — which is generally "
+    "the wrong ρ for the true channel.  Picking confidently-wrong "
+    "ρ is worse than picking 0.5 by default.")
+add_qa(doc,
+    "Why does the green curve stay above grey?",
+    "Because the DQN sees κ.  When κ is low it knows not to trust "
+    "ĥE and falls back toward ρ ≈ 0.5.  Worst-case behaviour: it "
+    "matches Fixed.  Best-case (high κ, high SNR): it pulls "
+    "toward Traditional's perfect-CSI performance.")
+
+
+# --- Figure 5: Action distribution
+add_h2(doc, "Figure 5  —  What ρ does the DQN actually pick?")
+add_figure(doc, "05_dqn_action_distribution.png",
+           "Figure 5: distribution of ρ chosen by the trained DQN, "
+           "split into low/mid/high SNR regimes.")
+add_para(doc, "What this is:", bold=True)
+add_para(doc,
+    "An honest look INSIDE the DQN.  We collected the ρ it picked "
+    "across many test channels and binned by SNR regime.  Three "
+    "histograms.")
+add_para(doc, "Axes:")
+add_bullets(doc, [
+    "x-axis: ρ value the DQN chose (one of the 17 grid points).",
+    "y-axis: fraction of channels on which it picked that ρ.",
+])
+add_para(doc, "The story:", bold=True)
+add_bullets(doc, [
+    "Low SNR (red): histogram tilts heavily toward ρ = 0.7–0.8.  "
+    "When power is scarce, give it to the message.",
+    "Mid SNR (green): central, peaked around 0.5–0.6.",
+    "High SNR (blue): tighter cluster around ρ = 0.5.  When "
+    "power is plentiful, the equal split becomes near-optimal.",
+])
+add_para(doc, "Why this matters:", bold=True)
+add_para(doc,
+    "Nobody told the DQN that 'low SNR → push more on the signal'. "
+    "It LEARNED that rule from the data.  This is the kind of "
+    "evidence that distinguishes 'we built an opaque black box' "
+    "from 'we built something whose behaviour we can interpret'.")
+add_para(doc, "If sir asks…", bold=True)
+add_qa(doc,
+    "Is this the same shape as the per-channel optimum?",
+    "Roughly, yes.  At low SNR the analytical optimum also pushes "
+    "ρ higher; at high SNR it pulls back toward 0.5.  The DQN "
+    "matches that trend without ever being told.")
+
+
+# --- Figure 6: Kappa sweep
+add_h2(doc, "Figure 6  —  κ sweep  (the second most important figure)")
+add_figure(doc, "06_kappa_sweep.png",
+           "Figure 6: average Rs vs κ at fixed SNR = 15 dB, Nt = 4, "
+           "400 channels per point.")
+add_para(doc, "What this is:", bold=True)
+add_para(doc,
+    "We hold the SNR fixed and slide κ from 0 (pure noise intel) "
+    "to 1 (perfect intel).  This is the cleanest possible test of "
+    "the noisy-CSI question.")
+add_para(doc, "Axes:")
+add_bullets(doc, [
+    "x-axis: κ ∈ [0, 1].  Left edge = useless intel; right edge = "
+    "perfect intel.",
+    "y-axis: average Rs in bits/s/Hz over 400 channels.",
+])
+add_para(doc, "The story:", bold=True)
+add_bullets(doc, [
+    "Grey (Fixed) is FLAT.  It doesn't even look at κ, so it gets "
+    "the same Rs everywhere.",
+    "Red (Traditional) DROPS as κ falls.  Around κ = 0.6 it "
+    "crosses below the Fixed line.  At κ = 0 it's significantly "
+    "below.",
+    "Green (DQN) holds at or above the Fixed line for the whole "
+    "sweep.  At high κ it approaches the Traditional curve "
+    "(matching the perfect-CSI optimum); at low κ it sits with "
+    "the Fixed line (safe fallback).",
+])
+add_para(doc, "Why this is THE figure for the κ-question story:",
+         bold=True)
+add_para(doc,
+    "It compresses the entire claim of the paper into one image. "
+    "The crossing point at κ ≈ 0.6 is the headline number for "
+    "the noisy-CSI failure mode, and the green-curve stability "
+    "is the entire reason DQN matters.")
+add_para(doc, "If sir asks…", bold=True)
+add_qa(doc,
+    "What if I push κ all the way to 0?",
+    "Both adaptive schemes lose information entirely, but DQN's "
+    "loss is smaller because at κ = 0 it has effectively trained "
+    "to play 'safe-ish 0.5' as a fallback.  Traditional has no "
+    "such fallback — it just picks whatever the optimiser spits "
+    "out for the random ĥE.")
+
+
+# --- Figure 7: Antenna count effect
+add_h2(doc, "Figure 7  —  Antenna-count effect at κ = 0.4")
+add_figure(doc, "07_antenna_count.png",
+           "Figure 7: SNR sweep at κ = 0.4 for Nt = 2, 4, 8 — "
+           "three side-by-side panels.")
+add_para(doc, "What this is:", bold=True)
+add_para(doc,
+    "Same noisy-CSI scenario as figure 4, but now we vary the "
+    "antenna count Nt.  Three panels, side-by-side, one per Nt. "
+    "The DQN is retrained for each Nt — different model file "
+    "per panel.")
+add_para(doc, "The story:", bold=True)
+add_bullets(doc, [
+    "Left (Nt = 2): the smallest gap, but the qualitative pattern "
+    "is already there.",
+    "Middle (Nt = 4): the headline scenario.  Same pattern as "
+    "figure 4.",
+    "Right (Nt = 8): widest gap.  DQN's lead over Fixed is "
+    "clearly biggest here.",
+])
+add_para(doc, "Why this matters:", bold=True)
+add_para(doc,
+    "The DQN's advantage isn't a quirk of one particular Nt.  "
+    "It generalises.  And the gain GROWS with Nt — more antennas "
+    "= more null-space room = more for the AN scheme to exploit "
+    "= more for a smart agent to extract.")
+add_para(doc, "If sir asks…", bold=True)
+add_qa(doc,
+    "Why does the gain grow with Nt?",
+    "Two effects.  (a) The null-space dimension is Nt − 1, so AN "
+    "is more isotropic at Eve as Nt grows — the underlying scheme "
+    "strengthens.  (b) Channel-geometry features like α become "
+    "more discriminative at higher Nt.  The DQN exploits both.")
+
+
+# --- Figure 8: Outage probability
+add_h2(doc, "Figure 8  —  Secrecy outage probability  "
+              "(reliability story)")
+add_figure(doc, "08_secrecy_outage.png",
+           "Figure 8: empirical secrecy outage probability, "
+           "SNR = 15 dB, κ = 0.4, Nt = 4, 1000 channels.")
+add_para(doc, "What this is:", bold=True)
+add_para(doc,
+    "A different way to ask 'is this scheme reliable?'.  Pick a "
+    "target rate R₀.  How often does each scheme FAIL to deliver "
+    "at least R₀ over the channel set?  Lower curve = more "
+    "reliable.")
+add_para(doc, "Axes:")
+add_bullets(doc, [
+    "x-axis: target rate R₀ in bits/s/Hz.",
+    "y-axis: probability of failing to hit R₀.  Goes from 0 (never "
+    "fails) to 1 (always fails).",
+])
+add_para(doc, "The story:", bold=True)
+add_para(doc,
+    "All three curves go from 0 (easy targets are always met) to "
+    "1 (impossible targets are never met).  The interesting part "
+    "is the ORDERING: at any non-trivial R₀, DQN's curve is to the "
+    "right of Traditional's.  Concretely, at R₀ = 4 bits/s/Hz the "
+    "DQN's outage is about 18% while Traditional's is about 26%. "
+    "That's a 30% relative reduction in outage at the same target.")
+add_para(doc, "If sir asks…", bold=True)
+add_qa(doc,
+    "Why is this metric different from average Rs?",
+    "Average Rs only tells you the mean.  Two schemes with the "
+    "same mean can have very different RELIABILITY — one might "
+    "deliver a steady 4 bits/s/Hz; the other might bounce between "
+    "0 and 8.  Outage probability captures the tail behaviour.  "
+    "For mission-critical systems (control loops, voice calls) "
+    "tail behaviour matters more than mean.")
+
+
+# --- Figure 9: Policy heatmap
+add_h2(doc, "Figure 9  —  Learned-policy heatmap  "
+              "(what the DQN actually learned)")
+add_figure(doc, "09_policy_heatmap.png",
+           "Figure 9: the DQN's average ρ-choice as a function of "
+           "(SNR, κ).  Left: 2D heatmap.  Right: marginal vs SNR.",
+           width_inches=6.0)
+add_para(doc, "What this is:", bold=True)
+add_para(doc,
+    "We sweep both SNR (x) and κ (y) on a fine grid.  At each "
+    "(SNR, κ) cell we ask the DQN to pick ρ on 80 random "
+    "channels and average the answers.  The heatmap colour shows "
+    "that average ρ.")
+add_para(doc, "How to read the heatmap:")
+add_bullets(doc, [
+    "Brighter colour = higher ρ (more power on the message).",
+    "Darker colour = lower ρ (more power on AN).",
+    "Bottom-left of the heatmap (low SNR, low κ): high ρ.  Bob "
+    "is starving and intel is bad — push the message hard but "
+    "play safe.",
+    "Top-right (high SNR, high κ): lower ρ.  Plenty of headroom "
+    "and good intel — afford generous AN.",
+])
+add_para(doc, "The story:", bold=True)
+add_para(doc,
+    "The heatmap is NOT flat.  ρ varies smoothly with both SNR "
+    "and κ — exactly the behaviour we wanted.  Without κ in the "
+    "state vector this map would be flat along the κ axis.")
+add_para(doc, "If sir asks…", bold=True)
+add_qa(doc,
+    "Why is the policy mostly determined by SNR?",
+    "Because SNR has a much larger impact on the optimal ρ than "
+    "κ does — at any κ, low SNR pushes ρ up significantly.  κ "
+    "modulates the policy on top of that, but more subtly.")
+
+
+# --- Figure 10: Eve strength
+add_h2(doc, "Figure 10  —  Eve-strength sweep  (Qasem-inspired)")
+add_figure(doc, "10_eve_strength.png",
+           "Figure 10: Rs vs Eve's channel-gain advantage β, in dB.")
+add_para(doc, "What this is:", bold=True)
+add_para(doc,
+    "Inspired by the Qasem 2024 paper (which we list as a "
+    "reference).  They study how Eve's geometric DISTANCE to "
+    "Alice affects the scheme.  Our channels have no geometry, "
+    "so we induce the same effect by scaling Eve's channel by "
+    "√β.  β > 1 means Eve's average gain exceeds Bob's.")
+add_para(doc, "The story:", bold=True)
+add_para(doc,
+    "Average Rs is nearly FLAT across a 15 dB range of β.  This "
+    "looks surprising but follows from the math: at Eve, "
+    "signal-receive scales with ‖hE‖² AND AN-leakage scales with "
+    "‖hE‖².  In the SINR ratio the scalings cancel.  Result: "
+    "β-invariance in expectation.")
+add_para(doc, "Why this matters:", bold=True)
+add_para(doc,
+    "Null-space AN is INTRINSICALLY robust to Eve's gain.  Even "
+    "when Eve gets stronger by a factor of 8 (= +9 dB), Rs barely "
+    "moves.  This is a structural property of the scheme, not "
+    "something we engineered.  The DQN inherits this for free.")
+add_para(doc, "If sir asks…", bold=True)
+add_qa(doc,
+    "Why does the DQN dip a tiny bit at the largest β?",
+    "Honest limitation: at β = +9 dB, Eve's channel magnitudes "
+    "are well outside the training distribution.  The DQN sees "
+    "feature values it didn't train on.  Widening the training "
+    "distribution along the gain axis would fix it.  We mention "
+    "this in future work.")
+
+
+# --- Figure 11: Optimal rho comparison
+add_h2(doc, "Figure 11  —  Per-channel oracle comparison  "
+              "(how close are we to perfection?)")
+add_figure(doc, "11_optimal_rho_comparison.png",
+           "Figure 11: for each scheme, the absolute deviation from "
+           "the per-channel optimum (left) and the secrecy-rate gap "
+           "to the oracle (right).",
+           width_inches=6.0)
+add_para(doc, "What this is:", bold=True)
+add_para(doc,
+    "For every test channel, we BRUTE-FORCE the perfect-knowledge "
+    "ρ* using the true hE.  Call that the oracle.  Then we ask "
+    "each scheme to pick its ρ using only what it's allowed to "
+    "see, and we measure (a) how far off its ρ is from ρ*, and "
+    "(b) how much Rs it gives up vs the oracle.")
+add_para(doc, "Two histograms:")
+add_bullets(doc, [
+    "Left: distribution of |ρ_chosen − ρ*|.  How far from "
+    "perfection in dial-setting terms.",
+    "Right: distribution of Rs* − Rs_chosen.  How much secrecy "
+    "rate each scheme leaves on the table.",
+])
+add_para(doc, "The story:", bold=True)
+add_para(doc,
+    "Left histogram: all three schemes have similar ρ-deviation "
+    "distributions.  Dial-setting accuracy isn't the main story.")
+add_para(doc,
+    "Right histogram is where it gets interesting.  Traditional "
+    "has the LARGEST mean rate gap — not because it's far in ρ "
+    "more often, but because when it IS far, it's CONFIDENTLY "
+    "far.  Picks an extreme ρ that hits a steep part of the Rs "
+    "curve.  DQN's gap is smallest because it tends to land on "
+    "soft, forgiving parts of the Rs curve.")
+add_para(doc, "If sir asks…", bold=True)
+add_qa(doc,
+    "If the ρ-deviation distributions are similar, why does the "
+    "rate-gap distribution differ?",
+    "Because Rs(ρ) is concave, not flat.  Being 0.2 off the "
+    "optimum near the peak costs almost nothing.  Being 0.2 off "
+    "the optimum on the steep slope costs a lot.  Traditional "
+    "tends to land on the steep slope when it's wrong; DQN tends "
+    "to stay near the soft top.")
+
+
+add_h2(doc, "Quick lookup table  —  if sir asks X, point at figure Y")
+table_data = [
+    ("'Show me the basic shape of the problem.'", "Figure 1"),
+    ("'Did your simulator work?'", "Figure 2 (the κ = 1 sanity check)"),
+    ("'Did your AI actually learn anything?'",
+     "Figure 3 (the training curve)"),
+    ("'Show me the headline result.'", "Figure 4"),
+    ("'What does your AI actually do?'",
+     "Figure 5 (action histogram) or Figure 9 (policy heatmap)"),
+    ("'What happens as the intel quality degrades?'", "Figure 6"),
+    ("'Does this work for different antenna counts?'", "Figure 7"),
+    ("'How reliable is the scheme?'",
+     "Figure 8 (outage probability)"),
+    ("'What did the AI learn?'",
+     "Figure 9 (policy heatmap)"),
+    ("'What if Eve is closer / stronger?'",
+     "Figure 10 (β sweep)"),
+    ("'How close are you to optimal?'",
+     "Figure 11 (per-channel oracle)"),
+]
+table = doc.add_table(rows=len(table_data) + 1, cols=2)
+table.style = "Light Grid Accent 1"
+hdr = table.rows[0].cells
+for i, h in enumerate(["If sir asks…", "Point at…"]):
+    cell = hdr[i]
+    cell.text = ""
+    r = cell.paragraphs[0].add_run(h)
+    r.bold = True
+    r.font.size = Pt(11)
+for i, (q, fig) in enumerate(table_data, start=1):
+    cells = table.rows[i].cells
+    cells[0].text = ""
+    cells[0].paragraphs[0].add_run(q).font.size = Pt(10)
+    cells[1].text = ""
+    cells[1].paragraphs[0].add_run(fig).font.size = Pt(10)
+
+
+# === PART H: Why the DQN wins ========================================
+add_h1(doc, "PART H  —  Three intuitions for why the DQN wins")
 
 add_h2(doc, "Intuition 1: it sees its own ignorance")
 add_para(doc,
@@ -828,8 +1331,8 @@ add_callout(doc,
     "two if there's time.")
 
 
-# === PART H: Q&A bank ================================================
-add_h1(doc, "PART H  —  Q&A bank")
+# === PART I: Q&A bank ================================================
+add_h1(doc, "PART I  —  Q&A bank")
 add_para(doc,
     "Sorted from easiest to hardest, so you can start with "
     "warm-ups and work into the technical questions.",
@@ -1016,8 +1519,8 @@ add_qa(doc,
     "change the policy, only the training stability.")
 
 
-# === PART I: Quick-revision tools ====================================
-add_h1(doc, "PART I  —  Last-minute revision")
+# === PART J: Quick-revision tools ====================================
+add_h1(doc, "PART J  —  Last-minute revision")
 
 
 add_h2(doc, "19.  One-line memory hooks")
@@ -1042,7 +1545,47 @@ for h in hooks:
     run.font.size = Pt(11)
 
 
-add_h2(doc, "20.  The live-demo script  (what to say while clicking)")
+add_h2(doc, "20.  Three viva walkthroughs at three time budgets")
+add_para(doc,
+    "Sir's available attention is hard to predict.  Here are three "
+    "scripted walkthroughs of decreasing length.  Pick the one that "
+    "matches how much time he gives you.")
+
+add_h3(doc, "If you have 60 seconds  (worst case)")
+add_bullets(doc, [
+    "Open the deck to slide 5 (the noisy-CSI failure mode plot).",
+    "One sentence: 'When Alice's intel on Eve is noisy, the "
+    "textbook optimiser actually performs WORSE than doing "
+    "nothing.  Our DQN avoids that.'",
+    "Point at the red curve dipping below grey, then at the green "
+    "curve staying above grey.",
+])
+
+add_h3(doc, "If you have 3 minutes  (most likely)")
+add_bullets(doc, [
+    "Slide 5 (the failure mode) — same one-sentence story as above.",
+    "Switch to slide 6 (κ sweep) — point at the κ ≈ 0.6 crossing "
+    "where Traditional drops below Fixed.  'This is the threshold "
+    "where trusting bad intel becomes harmful.'",
+    "Switch to slide 11 (live demo cue) — open Streamlit, drag "
+    "κ from 0.8 down to 0.2 in real-time and watch the Traditional "
+    "bar shrink while the DQN bar holds.",
+])
+
+add_h3(doc, "If you have 5+ minutes  (best case)")
+add_bullets(doc, [
+    "Slide 2 (the problem) — set the stage in 30 seconds.",
+    "Slide 3 (system model) — Alice/Bob/Eve, the AN trick, "
+    "the κ formula.",
+    "Slide 5 (failure mode) — show the dip.",
+    "Slide 7 (state and action) — quickly explain the agent sees "
+    "κ and α.",
+    "Streamlit demo: live test → κ slider → outage tab.",
+    "Slide 12 (takeaways) — close with the three-card summary.",
+])
+
+
+add_h2(doc, "21.  The live-demo script  (what to say while clicking)")
 demo_steps = [
     ("Live test tab",
      "Pick Nt = 8 (default), SNR = 15 dB, κ = 0.4.  Three bars "
@@ -1076,7 +1619,7 @@ for label, body in demo_steps:
     p.add_run(body).font.size = Pt(11)
 
 
-add_h2(doc, "21.  If something breaks during the demo")
+add_h2(doc, "22.  If something breaks during the demo")
 add_bullets(doc, [
     "Streamlit doesn't open: the command is "
     "`streamlit run app/streamlit_app.py`.  If port 8501 is busy, "
@@ -1093,7 +1636,7 @@ add_bullets(doc, [
 ])
 
 
-add_h2(doc, "22.  Final exam-day checklist")
+add_h2(doc, "23.  Final exam-day checklist")
 add_bullets(doc, [
     "Charge the laptop.  Bring the charger anyway.",
     "Open Streamlit BEFORE you walk in (or have the command "
