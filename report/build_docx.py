@@ -22,10 +22,42 @@ from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIG_DIR   = os.path.join(REPO_ROOT, "figures")
+EQ_DIR    = os.path.join(REPO_ROOT, "report", "eqs")
 OUT_PATH  = os.path.join(REPO_ROOT, "report", "report.docx")
+
+os.makedirs(EQ_DIR, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Equation rendering: each LaTeX string becomes a small high-DPI PNG that
+# we embed centred in the docx. Uses matplotlib mathtext (no system LaTeX
+# required) so the build runs anywhere.
+# ---------------------------------------------------------------------------
+
+def render_equation(latex: str, name: str, fontsize: int = 14) -> str:
+    """Render a math string to PNG at high DPI; return absolute path."""
+    out = os.path.join(EQ_DIR, f"{name}.png")
+    fig = plt.figure(figsize=(0.01, 0.01))
+    fig.text(0.0, 0.0, f"${latex}$", fontsize=fontsize)
+    # Render once to measure tight bbox, then resize and re-render.
+    fig.canvas.draw()
+    bbox = fig.get_tightbbox(fig.canvas.get_renderer())
+    plt.close(fig)
+
+    fig = plt.figure(figsize=(bbox.width + 0.2, bbox.height + 0.15))
+    fig.text(0.5, 0.5, f"${latex}$", fontsize=fontsize,
+             ha="center", va="center")
+    fig.savefig(out, dpi=300, bbox_inches="tight",
+                pad_inches=0.05, transparent=False)
+    plt.close(fig)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -63,14 +95,31 @@ def add_para(doc, text, italic=False, bold=False, size=11, align=None):
     return p
 
 
-def add_equation(doc, text):
-    """Render an equation as a centred italic line."""
+def add_equation(doc, latex: str, name: str, number: str | None = None,
+                 height_inches: float = 0.32):
+    """
+    Render `latex` to a PNG and embed it centred in the document. If
+    `number` is given (e.g. "(1)"), it is placed flush right on the same
+    line as the equation, mimicking standard journal numbering.
+    """
+    img_path = render_equation(latex, name, fontsize=14)
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.add_run(text)
-    run.italic = True
-    run.font.size = Pt(11)
+    run = p.add_run()
+    run.add_picture(img_path, height=Inches(height_inches))
+    if number:
+        # Add the equation number flush right with a tab.
+        tab_run = p.add_run(f"\t\t\t\t{number}")
+        tab_run.font.size = Pt(11)
     return p
+
+
+def add_inline_math(paragraph, latex: str, name: str,
+                    height_inches: float = 0.18):
+    """Insert a small inline math image into an existing paragraph."""
+    img_path = render_equation(latex, name, fontsize=12)
+    run = paragraph.add_run()
+    run.add_picture(img_path, height=Inches(height_inches))
 
 
 def add_figure(doc, filename, caption, width_inches=5.8):
@@ -204,21 +253,52 @@ add_para(
     "noise, picks a confident but incorrect split, and ends up worse than "
     "not optimising at all."
 )
+add_heading(doc, "1.1 Problem statement", level=2)
 add_para(
     doc,
-    "The contribution of this paper is to give Alice a learning-based way "
-    "out of that trap. We train a deep Q-network (DQN) [6, 7] over a "
-    "distribution of CSI qualities so that the resulting policy knows how "
-    "much to trust its own estimate. The DQN sees a seven-dimensional "
-    "summary of the operating conditions, including the CSI-quality factor "
+    "Concretely, the problem this paper addresses is the following. Alice "
+    "is constrained to use the null-space AN construction of Goel–Negi "
+    "[4] on a MISO wiretap channel. She must choose, on every "
+    "transmission block, a single scalar ρ ∈ (0, 1) that splits "
+    "her transmit power between the data signal and the artificial noise. "
+    "Two classical answers exist: (i) the fixed split ρ = 0.5, which "
+    "never fails catastrophically but leaves rate on the table; and "
+    "(ii) a per-channel scalar optimisation against the noisy estimate "
+    "ĥE, which is rate-optimal under perfect CSI but, as shown below, "
+    "drops below the fixed baseline once the CSI-quality factor κ "
+    "falls below approximately 0.6. Neither answer is acceptable in "
+    "deployment: the fixed split is needlessly conservative when intel is "
+    "good, and the optimiser is dangerously aggressive when intel is "
+    "poor. The question this paper answers is therefore:"
+)
+quote_p = doc.add_paragraph()
+quote_p.paragraph_format.left_indent = Inches(0.5)
+quote_p.paragraph_format.right_indent = Inches(0.5)
+quote_run = quote_p.add_run(
+    "Can a single, deployment-ready policy be trained that achieves "
+    "near-optimal Rs when κ is high, avoids the noisy-CSI collapse "
+    "when κ is low, and does so without retuning at every "
+    "operating point?"
+)
+quote_run.italic = True
+quote_run.font.size = Pt(11)
+
+add_heading(doc, "1.2 Contribution", level=2)
+add_para(
+    doc,
+    "We answer the question above with a learning-based scheme. We train "
+    "a deep Q-network (DQN) [6, 7] over a distribution of CSI qualities, "
+    "antenna counts, and SNRs, so the resulting policy is trained to "
+    "expect noisy CSI rather than to be fooled by it. The DQN observes "
+    "a seven-dimensional state that includes the CSI-quality factor "
     "κ and an alignment cue between Bob’s beam direction and the "
-    "noisy Eve estimate. From that input it chooses one of seventeen "
-    "candidate power splits. The motivation for treating CSI quality as a "
-    "separate axis came from the friendly-jammer WSN scheme of Qasem et "
-    "al. [8], who studied how an eavesdropper’s geometric position "
-    "interacts with an external jammer’s power; we adapt the "
-    "underlying robustness question to a MISO setting with collocated "
-    "null-space AN."
+    "noisy Eve estimate. From that input it selects one of seventeen "
+    "candidate power splits. The motivation for treating CSI quality as "
+    "a distinct robustness axis came from the friendly-jammer WSN "
+    "scheme of Qasem et al. [8], who study how an eavesdropper’s "
+    "geometric position interacts with an external jammer’s power; "
+    "we adapt that robustness question to a MISO setting with "
+    "collocated null-space AN."
 )
 add_para(
     doc,
@@ -380,7 +460,10 @@ add_para(
     "transmission block, which is the standard assumption in the AN "
     "literature. The transmitted signal is"
 )
-add_equation(doc, "x = √(ρ P) · w · s + √((1−ρ) P) · z   (1)")
+add_equation(doc,
+    r"\mathbf{x} \;=\; \sqrt{\rho P}\, \mathbf{w}\, s "
+    r"+ \sqrt{(1-\rho)\, P}\, \mathbf{z}",
+    "eq01_tx_signal", number="(1)")
 add_para(
     doc,
     "where s ~ CN(0, 1) is the data symbol, P is the total transmit power "
@@ -414,12 +497,22 @@ add_para(
     "With the AN vector averaged out analytically, the per-channel "
     "achievable secrecy rate has a closed form"
 )
-add_equation(doc, "Rs = [ log₂(1 + γB) − log₂(1 + γE) ]⁺   (2)")
+add_equation(doc,
+    r"R_s \;=\; \left[\, \log_2(1 + \gamma_B) "
+    r"- \log_2(1 + \gamma_E) \,\right]^{+}",
+    "eq02_rs", number="(2)")
 add_para(
     doc,
     "with [x]⁺ = max(0, x), and"
 )
-add_equation(doc, "γB = ρ · (P/σ²) · ‖hB‖²,    γE = (ρ · (P/σ²) · |hE^H w|²) / ( ((1−ρ)·(P/σ²)·‖P⊥ hE‖²) / (Nt−1) + 1 )   (3)")
+add_equation(doc,
+    r"\gamma_B = \rho\, \frac{P}{\sigma^2}\, \|\mathbf{h}_B\|^2,"
+    r"\quad "
+    r"\gamma_E = "
+    r"\frac{\rho\, \frac{P}{\sigma^2}\, |\mathbf{h}_E^{H}\mathbf{w}|^2}"
+    r"{\frac{(1-\rho)\, \frac{P}{\sigma^2}\, \|\mathbf{P}_{\perp}\mathbf{h}_E\|^2}"
+    r"{N_t - 1} + 1}",
+    "eq03_gammas", number="(3)", height_inches=0.85)
 add_para(
     doc,
     "Bob picks up the full beamforming gain ‖hB‖² and zero "
@@ -436,7 +529,11 @@ add_para(
     "In any practical setting Alice’s estimate of Eve’s channel "
     "is noisy. We model that as a linear additive perturbation,"
 )
-add_equation(doc, "ĥE = √κ · hE + √(1−κ) · e,    e ~ CN(0, I)   (4)")
+add_equation(doc,
+    r"\hat{\mathbf{h}}_E \;=\; \sqrt{\kappa}\, \mathbf{h}_E "
+    r"+ \sqrt{1-\kappa}\, \mathbf{e},"
+    r"\quad \mathbf{e} \sim \mathcal{CN}(\mathbf{0}, \mathbf{I})",
+    "eq04_csi", number="(4)")
 add_para(
     doc,
     "where the CSI-quality factor κ ∈ [0, 1] controls how much "
@@ -500,14 +597,24 @@ add_para(
     "vector to one of seventeen discrete ρ values."
 )
 add_para(doc, "State.", bold=True)
-add_para(
-    doc,
-    "The agent sees s = [ ‖hB‖²/Nt, ‖ĥE‖²/Nt, "
-    "SNR(dB)/30, ρ_prev, Rs_prev/10, κ, α ], where the "
-    "alignment cue α is the squared cosine between Bob’s beam "
-    "direction and the noisy Eve estimate, α = |hB^H ĥE|² / "
-    "(‖hB‖² ‖ĥE‖²) ∈ [0, 1]."
-)
+add_para(doc, "The agent observes the seven-dimensional vector")
+add_equation(doc,
+    r"\mathbf{s} = \left[ "
+    r"\frac{\|\mathbf{h}_B\|^2}{N_t},\;\;"
+    r"\frac{\|\hat{\mathbf{h}}_E\|^2}{N_t},\;\;"
+    r"\frac{\mathrm{SNR}_{\mathrm{dB}}}{30},\;\;"
+    r"\rho_{\mathrm{prev}},\;\;"
+    r"\frac{R_{s,\mathrm{prev}}}{10},\;\;"
+    r"\kappa,\;\;"
+    r"\alpha "
+    r"\right]",
+    "eq05_state", number="(5)", height_inches=0.55)
+add_para(doc, "with an alignment cue defined as")
+add_equation(doc,
+    r"\alpha \;=\; "
+    r"\frac{|\,\mathbf{h}_B^{H}\, \hat{\mathbf{h}}_E\,|^2}"
+    r"{\|\mathbf{h}_B\|^2 \, \|\hat{\mathbf{h}}_E\|^2} \;\in\; [0, 1]",
+    "eq06_alpha", number="(6)", height_inches=0.7)
 add_para(
     doc,
     "Three of the seven entries are diagnostic (ρ_prev, Rs_prev, and "
@@ -522,24 +629,24 @@ add_para(
 )
 add_para(
     doc,
-    "The earlier version of this work used a five-dimensional state "
+    "An earlier iteration of this work used a five-dimensional state "
     "without κ and without α. The agent in that version "
-    "essentially collapsed onto a single average policy across the "
-    "training distribution, which gave it only a marginal lead over the "
-    "Fixed baseline. Adding the two geometry features made the bigger "
-    "difference; in particular, exposing κ lets the agent fall back "
-    "to safer splits when it knows the estimate is unreliable."
+    "converged to a near-uniform average policy across the training "
+    "distribution and produced only a marginal improvement over the "
+    "Fixed baseline. Adding the two geometry features yielded the "
+    "decisive gain; in particular, exposing κ allows the agent to "
+    "fall back to safer splits when its estimate is unreliable."
 )
 add_para(doc, "Action.", bold=True)
 add_para(
     doc,
-    "The action space is A = {0.05, 0.10, 0.15, ..., 0.85}, seventeen "
-    "candidate splits in steps of 0.05. Discretisation lets us use the "
-    "lighter DQN formulation of [6] instead of an actor–critic "
-    "algorithm with continuous actions. We started with a nine-action grid "
-    "in steps of 0.10, which turned out to be too coarse near the "
-    "operating optimum; tightening to 0.05 gave the agent enough "
-    "resolution without making the Q-network harder to learn."
+    "The action space is A = {0.05, 0.10, 0.15, ..., 0.85}, comprising "
+    "seventeen candidate splits in steps of 0.05. Discretisation enables "
+    "the lighter DQN formulation of [6] in place of an actor–critic "
+    "algorithm with continuous actions. An initial nine-action grid in "
+    "steps of 0.10 proved too coarse near the operating optimum; "
+    "refining the resolution to 0.05 yielded sufficient precision while "
+    "keeping the Q-network tractable."
 )
 add_para(doc, "Network.", bold=True)
 add_para(
@@ -686,12 +793,12 @@ add_para(
     "is the SNR trend already captured by Figure 5: ρ is large at low "
     "SNR and falls toward 0.5 as SNR grows. The second is the κ "
     "trend: at fixed SNR, the agent slightly increases ρ as κ "
-    "rises. When the estimate is more reliable, the agent is willing to "
-    "lean more on it and shift the split a bit further from the "
-    "safe-default 0.5; when the estimate is unreliable the agent pulls "
-    "back toward the equal split. The earlier version of the agent, which "
-    "did not see κ, could not do this and ended up close to a single "
-    "average policy."
+    "rises. When the estimate is more reliable, the agent leans on it "
+    "and shifts the split further from the safe default of 0.5; when "
+    "the estimate is unreliable, the agent retreats toward the equal "
+    "split. The earlier version of the agent, which did not see "
+    "κ, could not produce this conditional behaviour and converged "
+    "to a near-uniform average policy."
 )
 add_figure(doc, "09_policy_heatmap.png",
            "Figure 6: Learned DQN policy at Nt = 4. Left: average ρ "
