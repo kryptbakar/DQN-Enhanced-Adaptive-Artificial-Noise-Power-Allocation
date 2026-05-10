@@ -154,8 +154,9 @@ team_p.add_run(
 # Reading-time table
 rt_p = doc.add_paragraph()
 rt_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-rtr = rt_p.add_run("\nFront-to-back read time: ~40 minutes "
-                   "(includes all 11 result figures + Q&A bank)")
+rtr = rt_p.add_run("\nFront-to-back read time: ~50 minutes  "
+                   "(now includes a worked-out math example, "
+                   "a tour of the codebase, and slide-by-slide notes)")
 rtr.font.size = Pt(10)
 rtr.italic = True
 rtr.font.color.rgb = GREY
@@ -585,6 +586,92 @@ add_qa(doc,
     "ρ values.  Without α the agent is geometrically blind.")
 
 
+# === PART C.5: A worked example we can do BY HAND =====================
+add_h1(doc, "PART C.5  —  A worked example you can do by hand")
+add_para(doc,
+    "Sir's classic move at the whiteboard:  'pick a channel, work "
+    "out Rs.'  Here's a complete example so you have one ready in "
+    "your head.  All numbers are honest — they come from the actual "
+    "simulator at seed 2026.",
+    italic=True)
+
+add_h2(doc, "The setup")
+add_bullets(doc, [
+    "Nt = 4 antennas, SNR = 15 dB (so P/σ² = 31.62 in linear units).",
+    "κ = 0.4 (the realistic noisy-intel point).",
+    "Pick one channel realisation:  ‖hB‖² = 4.21,  ‖hE‖² = 3.78  "
+    "(typical Rayleigh draws — average is Nt = 4).",
+    "Inner product of the noisy estimate with the beam direction "
+    "yields  |ĥE^H w|² = 0.83.",
+    "Eve's null-space-projected gain is  ‖P⊥ ĥE‖² = 2.95.",
+])
+
+add_h2(doc, "Bob's effective SNR  γB")
+add_para(doc,
+    "Plug straight into  γB = ρ · (P/σ²) · ‖hB‖²  =  ρ · 31.62 · 4.21:")
+add_bullets(doc, [
+    "ρ = 0.3:  γB = 39.94  →  log₂(1 + γB) = 5.36 bits/s/Hz",
+    "ρ = 0.5:  γB = 66.56  →  log₂(1 + γB) = 6.08 bits/s/Hz",
+    "ρ = 0.7:  γB = 93.18  →  log₂(1 + γB) = 6.56 bits/s/Hz",
+    "ρ = 0.85: γB = 113.16 →  log₂(1 + γB) = 6.83 bits/s/Hz",
+])
+
+add_h2(doc, "Eve's SINR  γE")
+add_para(doc,
+    "γE = numerator / denominator, where  "
+    "numerator = ρ · 31.62 · 0.83  (signal that leaks)  and  "
+    "denominator = (1−ρ) · 31.62 · 2.95 / (Nt − 1)  +  1 "
+    "= (1−ρ) · 31.09 + 1.")
+add_bullets(doc, [
+    "ρ = 0.3:  num = 7.87,   denom = 22.76,   γE = 0.346  →  "
+    "log₂(1 + γE) = 0.43",
+    "ρ = 0.5:  num = 13.12,  denom = 16.55,   γE = 0.793  →  "
+    "log₂(1 + γE) = 0.84",
+    "ρ = 0.7:  num = 18.37,  denom = 10.33,   γE = 1.778  →  "
+    "log₂(1 + γE) = 1.47",
+    "ρ = 0.85: num = 22.31,  denom = 5.66,    γE = 3.943  →  "
+    "log₂(1 + γE) = 2.31",
+])
+
+add_h2(doc, "Secrecy rate  Rs = log₂(1+γB) − log₂(1+γE)  (≥ 0)")
+add_bullets(doc, [
+    "ρ = 0.30:  Rs ≈ 5.36 − 0.43  =  4.93 bits/s/Hz",
+    "ρ = 0.50:  Rs ≈ 6.08 − 0.84  =  5.24 bits/s/Hz  ←  Fixed picks this",
+    "ρ = 0.70:  Rs ≈ 6.56 − 1.47  =  5.09 bits/s/Hz",
+    "ρ = 0.85:  Rs ≈ 6.83 − 2.31  =  4.52 bits/s/Hz",
+])
+add_para(doc,
+    "On THIS particular channel, the peak is near ρ = 0.5.  Fixed "
+    "happens to land at the optimum for this channel.  But across "
+    "MANY channels with different geometries, the optimum varies "
+    "from ~0.4 to ~0.7 — and that is what an adaptive scheme is "
+    "supposed to track.")
+
+add_h2(doc, "Why does the AI's job differ from Traditional's?")
+add_para(doc,
+    "Traditional sees ĥE only — not the true hE.  In our example "
+    "ĥE has 60% noise mixed in.  The optimiser solves "
+    "argmax Rs(ρ; ĥE) — possibly landing at a ρ that's optimal for "
+    "ĥE but NOT for hE.  If Traditional picks ρ = 0.85 "
+    "thinking that's right for the noisy estimate, the TRUE Rs "
+    "drops to 4.52 instead of 5.24.  That gap is the cost of "
+    "trusting bad intel.")
+add_para(doc,
+    "Our DQN is fed κ = 0.4, sees the alignment cue α, and chooses "
+    "from a discrete grid.  Trained to expect noise, it tends to "
+    "pick something close to the safe-default 0.5 when κ is low — "
+    "matching Fixed.  When κ is high, it shifts toward the "
+    "optimiser's answer.  Conditional behaviour, learned from data.")
+
+add_h2(doc, "Memory hook")
+add_callout(doc,
+    "γB grows with ρ (linear in ρ).  γE rises with ρ in the "
+    "numerator AND drops with (1−ρ) in the denominator.  At small "
+    "ρ, Bob can't hear, Rs is low.  At large ρ, Eve hears too "
+    "much, Rs falls.  Somewhere in between, Bob wins by the most "
+    "— that is the ρ* the agent is hunting.")
+
+
 # === PART D: The AI agent ============================================
 add_h1(doc, "PART D  —  The AI agent  (analogy first, then mechanics)")
 
@@ -717,6 +804,152 @@ add_bullets(doc, [
 add_para(doc,
     "Total training cost: about 38 seconds per Nt on a single CPU "
     "core.  All three Nt models train in under 2 minutes.")
+
+
+# === PART E.5: Codebase tour =========================================
+add_h1(doc, "PART E.5  —  The codebase  (where each piece actually lives)")
+add_para(doc,
+    "Sir might point at the report and say 'show me where in your "
+    "code this happens.'  Knowing the layout matters.  Below is "
+    "every file we use, what it does, and the function name that "
+    "implements the thing.",
+    italic=True)
+
+add_h2(doc, "core/  —  the actual algorithms")
+files_core = [
+    ("channel.py",
+     "generates random Rayleigh channels (CN(0, I) entries), builds "
+     "the MRT beam w = hB / ‖hB‖, and constructs the null-space "
+     "projector P⊥.  This is where the 'Bob hears no AN' magic is "
+     "set up."),
+    ("csi.py",
+     "the imperfect-CSI model.  imperfect_csi(hE, kappa, rng) "
+     "returns ĥE = √κ · hE + √(1−κ) · e.  Tiny file — about ten "
+     "lines of real logic."),
+    ("secrecy.py",
+     "compute_secrecy_rate(hB, hE, rho, snr_linear) returns Rs.  "
+     "This is the closed-form expression we derived in PART C and "
+     "C.5.  AN-averaged so it's deterministic per channel."),
+    ("state.py",
+     "build_state(hB, hE_est, snr_db, last_rho, last_rs, kappa) "
+     "assembles the 7-dim state vector for the DQN.  All seven "
+     "entries we listed in PART B section 9 live here."),
+    ("dqn_agent.py",
+     "the Q-network itself.  build_q_network() returns the Keras "
+     "MLP (7 → 64 → 64 → 32 → 17, ReLU, Huber loss, Adam).  "
+     "DQNAgent class wraps the online and target networks plus "
+     "epsilon-greedy action selection.  ACTION_RHOS at the top "
+     "is the 17-element discrete action space."),
+    ("replay_buffer.py",
+     "the standard circular buffer with random-batch sampling.  "
+     "Capacity 10 000."),
+    ("trainer.py",
+     "the training loop.  TrainingConfig dataclass holds all the "
+     "hyperparameters; train(cfg) runs the 7000-episode loop and "
+     "returns the trained agent + a TrainingHistory object with "
+     "per-episode rewards and losses."),
+    ("schemes.py",
+     "the three schemes wrapped in a uniform interface.  "
+     "fixed_scheme, traditional_optimizer (calls "
+     "scipy.optimize.minimize_scalar), and make_dqn_scheme() "
+     "(returns a callable that wraps a trained DQNAgent).  "
+     "evaluate_scheme() at the bottom is the harness that "
+     "enforces 'pick using the noisy estimate, score against the "
+     "true channel.'"),
+    ("experiments.py",
+     "Phase-4 experiments that produce figures 6, 7, 8, 9, 10, 11.  "
+     "Each experiment_*() function takes some kwargs, runs a Monte "
+     "Carlo sweep, and saves a figure."),
+]
+for name, desc in files_core:
+    p = doc.add_paragraph()
+    p.paragraph_format.left_indent = Inches(0.25)
+    n_run = p.add_run(name + "  —  ")
+    n_run.bold = True
+    n_run.font.color.rgb = NAVY
+    n_run.font.size = Pt(11)
+    p.add_run(desc).font.size = Pt(11)
+
+add_h2(doc, "scripts/  —  entry points and figure generators")
+files_scripts = [
+    ("demo.py",
+     "Phase 1+2 sanity checks — null-space verification, single "
+     "channel Rs(ρ) sweep, Scheme 1 vs Scheme 2 at κ = 1.  "
+     "Generates figures 1 and 2."),
+    ("train_dqn.py",
+     "trains ONE DQN at a given Nt.  --nt {2,4,8} flag picks the "
+     "antenna count.  Saves models/dqn_trained_nt{Nt}.keras and "
+     "figures/03_dqn_training_curve.png."),
+    ("train_all_nt.py",
+     "convenience driver — runs train_dqn for all three Nt values.  "
+     "Total runtime ~2 minutes."),
+    ("demo_full.py",
+     "the headline 3-scheme comparison.  Generates figures 4 and 5 "
+     "from the trained Nt = 4 model."),
+    ("run_experiments.py",
+     "runs Phase-4 experiments end-to-end.  Generates figures 6, 7, "
+     "8."),
+    ("make_policy_heatmap.py", "generates figure 9."),
+    ("make_eve_strength.py", "generates figure 10."),
+    ("make_optimal_rho.py", "generates figure 11 (oracle comparison)."),
+    ("make_before_after.py",
+     "generates figure 12 — the before/after panel used on slide 5."),
+    ("make_training_curve_clean.py",
+     "generates figure 13 — the smoothed training curve used on "
+     "slide 8."),
+    ("make_geometry_sketch.py",
+     "generates figure 14 — the Alice/Bob/Eve diagram used on "
+     "slide 3."),
+    ("bench_runtimes.py",
+     "measures per-call wall-clock latency for the three schemes.  "
+     "Source of the numbers in the runtime table in the report."),
+]
+for name, desc in files_scripts:
+    p = doc.add_paragraph()
+    p.paragraph_format.left_indent = Inches(0.25)
+    n_run = p.add_run(name + "  —  ")
+    n_run.bold = True
+    n_run.font.color.rgb = NAVY
+    n_run.font.size = Pt(11)
+    p.add_run(desc).font.size = Pt(11)
+
+add_h2(doc, "app/  —  the live demo")
+add_para(doc,
+    "app/streamlit_app.py is the Streamlit GUI.  Single file, "
+    "five tabs.  Run it with  streamlit run app/streamlit_app.py.  "
+    "Sidebar selects Nt and seed; each tab runs cached Monte Carlo "
+    "evaluations so dragging a slider back-and-forth is instant "
+    "after the first compute.")
+add_para(doc,
+    "app/demo.html is a layman-friendly static HTML page (no "
+    "server needed) — embeds figure 4 and has two interactive "
+    "sliders.  Bonus material; not needed for the viva.")
+
+add_h2(doc, "models/  —  the trained weights")
+add_para(doc,
+    "models/dqn_trained_nt2.keras, …_nt4.keras, …_nt8.keras.  "
+    "Three Keras files, one per antenna count.  Tracked in git "
+    "because they're small (a few hundred KB each).  These are "
+    "what app/streamlit_app.py loads at start-up.")
+
+add_h2(doc, "tests/  —  the test suite")
+add_para(doc,
+    "Three test files (test_channel, test_secrecy, test_schemes) "
+    "with 38 unit tests covering channel statistics, projector "
+    "properties, the secrecy-rate formula, and the three-scheme "
+    "interface.  All 38 pass.  Useful to point at if sir asks "
+    "'how do you know your formulas are correct?'")
+
+add_h2(doc, "report/  —  the deliverables")
+add_bullets(doc, [
+    "main.tex + refs.bib  —  the IEEE LaTeX source for the formal "
+    "report.",
+    "report.docx  —  Word version of the same report.",
+    "slides.pptx  —  the 14-slide presentation deck.",
+    "viva_prep.docx  —  THIS document.",
+    "presenter_script.docx  —  slide-by-slide speaking notes.",
+    "overleaf.zip  —  one-shot upload bundle for Overleaf.",
+])
 
 
 # === PART F: Sensitivity =============================================
@@ -1300,6 +1533,111 @@ for i, (q, fig) in enumerate(table_data, start=1):
     cells[1].paragraphs[0].add_run(fig).font.size = Pt(10)
 
 
+# === PART G.5: Slide-by-slide narrative ==============================
+add_h1(doc, "PART G.5  —  Slide-by-slide  (what each slide is, what to say)")
+add_para(doc,
+    "The deck has 14 slides for a 10–12 minute talk.  This section "
+    "walks through every slide so you understand WHY each one is "
+    "there, not just what's on it.  The presenter_script.docx has "
+    "the verbatim words to say; this section is for understanding.",
+    italic=True)
+
+slide_notes = [
+    ("Slide 1  —  Title",
+     "Just the project title and the three of us.  20 seconds.  "
+     "Use this to settle the audience and announce who'll do what.  "
+     "Decide BEFORE the day who is the driver, presenter, and backup."),
+    ("Slide 2  —  The problem we're solving",
+     "Story-first slide.  No formulas yet.  Wireless is broadcast → "
+     "Eve hears everything → AN injection helps Bob more than Eve → "
+     "but choosing the AN-vs-signal split is hard when intel is "
+     "noisy.  Lead with this so sir understands the WHY before any "
+     "math lands.  The five bullet points walk in order: broadcast "
+     "→ AN → split → Goel-Negi → optimiser fails."),
+    ("Slide 3  —  The setting (geometry sketch)",
+     "Visual anchor.  Alice (4 navy dots) on the left, green MRT "
+     "wedge points at Bob, red hatched region is the AN spray, Eve "
+     "sits in the hatched region.  The two cards underneath give "
+     "the imperfect-CSI formula and the κ legend (1 = perfect, "
+     "0.4 = our default, 0 = guessing).  This is the slide to "
+     "point at if sir says 'where exactly is the artificial noise "
+     "going?'"),
+    ("Slide 4  —  Two classical answers",
+     "Sets up the contrast we're about to break.  Left card "
+     "(navy): Fixed at ρ = 0.5 — safe, never catastrophic.  Right "
+     "card (red): Traditional optimiser — provably optimal at "
+     "κ = 1, dangerously aggressive at κ < 1.  Both have pros and "
+     "cons; neither is good enough.  This sets up slide 5."),
+    ("Slide 5  —  BEFORE vs AFTER our AI  (the punchline)",
+     "Hero slide.  Two-panel figure.  LEFT panel shows what existed "
+     "before our paper: red Traditional curve dipping below grey "
+     "Fixed.  RIGHT panel shows the same plot WITH our DQN added: "
+     "green curve sits at or above grey everywhere.  The blue "
+     "axis-callout strip below the figure makes the X (transmit "
+     "SNR in dB) and Y (Rs in bits/s/Hz) crystal clear.  If you "
+     "had only 60 seconds, this is the slide."),
+    ("Slide 6  —  Our approach",
+     "Three coloured idea-cards: Reframe (offline training, not "
+     "online optimisation), Two key inputs (κ + alignment α), "
+     "Single deployable model (no retuning).  This explains the "
+     "WHY of the DQN before the WHAT.  60 seconds."),
+    ("Slide 7  —  State and action space",
+     "The technical heart.  Left side: 7 icons, one per state "
+     "element, plus the rendered alignment formula.  Right side: "
+     "two cards covering the action space (17 discrete ρ values) "
+     "and the network architecture (7 → 64 → 64 → 32 → 17).  "
+     "60 seconds.  Don't get lost in details — the seven icons "
+     "are enough."),
+    ("Slide 8  —  Training",
+     "The clean training curve plus three stat cards (7000 "
+     "episodes, ~38 seconds, three Nt models).  The single line "
+     "shows running-average reward climbing as ε decays.  "
+     "45 seconds.  If sir asks about hyperparameters specifically, "
+     "open the report.docx, section 4.3 (Training paragraph)."),
+    ("Slide 9  —  Headline result  (figure 4)",
+     "The headline three-scheme comparison.  Top panel: absolute "
+     "Rs.  Bottom panel: gain over Fixed.  60 seconds.  Drive home "
+     "two facts: red drops below the zero-line in the bottom "
+     "panel; green stays above it everywhere."),
+    ("Slide 10  —  κ sweep  +  outage probability",
+     "Two side-by-side figures.  Left: κ sweep at fixed SNR — "
+     "Traditional crosses below Fixed near κ = 0.6.  Right: outage "
+     "probability — DQN's curve sits to the right of "
+     "Traditional's, meaning lower failure rate at the same target "
+     "rate.  60 seconds."),
+    ("Slide 11  —  With vs Without AI  (results table)",
+     "The numbers slide.  Five rows × five columns.  Without-AI "
+     "columns on the left, With-AI columns on the right.  DQN "
+     "column highlighted green.  Bottom row (red-tinted) is the "
+     "outage metric.  50 seconds.  Pause to let the table sink in.  "
+     "If sir asks 'why is the DQN gain only 0.03–0.08 bits/s/Hz?', "
+     "the answer is: Fixed at ρ = 0.5 is itself surprisingly close "
+     "to optimal in this MISO setting, so even matching Fixed is "
+     "non-trivial when intel is bad.  Robustness, not aggressive "
+     "optimisation."),
+    ("Slide 12  —  Live demo cue",
+     "Five demo cards in a row, with a one-line summary of each "
+     "Streamlit tab.  Use this slide as a launch pad — switch to "
+     "the browser, drag the κ slider, come back for the "
+     "conclusion.  2-3 minutes for the demo itself."),
+    ("Slide 13  —  Takeaways",
+     "Three coloured takeaway cards: Problem (noisy CSI fails the "
+     "optimiser), Fix (DQN trained over random κ + alignment cue), "
+     "Outcome (one model beats Traditional everywhere we tested).  "
+     "30 seconds.  Pace it: each card is one sentence."),
+    ("Slide 14  —  Q&A  (thank-you screen)",
+     "Plain navy slide with 'Thank you — questions?'.  Whoever has "
+     "been the BACKUP all talk should now be ready to field "
+     "questions; the PRESENTER can rest.  If sir gives you the "
+     "easy ones, channel the energy from PART H of this doc "
+     "(three intuitions).  If he goes deep, channel PART I "
+     "(Q&A bank)."),
+]
+for title, body in slide_notes:
+    add_h2(doc, title)
+    add_para(doc, body)
+
+
 # === PART H: Why the DQN wins ========================================
 add_h1(doc, "PART H  —  Three intuitions for why the DQN wins")
 
@@ -1553,35 +1891,40 @@ add_para(doc,
 
 add_h3(doc, "If you have 60 seconds  (worst case)")
 add_bullets(doc, [
-    "Open the deck to slide 5 (the noisy-CSI failure mode plot).",
+    "Open the deck to slide 5 (the BEFORE-vs-AFTER plot).",
     "One sentence: 'When Alice's intel on Eve is noisy, the "
     "textbook optimiser actually performs WORSE than doing "
     "nothing.  Our DQN avoids that.'",
-    "Point at the red curve dipping below grey, then at the green "
-    "curve staying above grey.",
+    "Point at the red curve dipping below grey on the LEFT panel, "
+    "then at the green curve staying above grey on the RIGHT panel.",
+    "If sir wants concrete numbers, jump to slide 11 (the table).",
 ])
 
 add_h3(doc, "If you have 3 minutes  (most likely)")
 add_bullets(doc, [
-    "Slide 5 (the failure mode) — same one-sentence story as above.",
-    "Switch to slide 6 (κ sweep) — point at the κ ≈ 0.6 crossing "
-    "where Traditional drops below Fixed.  'This is the threshold "
-    "where trusting bad intel becomes harmful.'",
-    "Switch to slide 11 (live demo cue) — open Streamlit, drag "
-    "κ from 0.8 down to 0.2 in real-time and watch the Traditional "
-    "bar shrink while the DQN bar holds.",
+    "Slide 5 (BEFORE vs AFTER) — same one-sentence story as above.",
+    "Slide 10 (κ sweep) — point at the κ ≈ 0.6 crossing where "
+    "Traditional drops below Fixed.  'This is the threshold where "
+    "trusting bad intel becomes harmful.'",
+    "Slide 11 (results table) — read off the bottom outage row: "
+    "'At a target of 4 bits per second per Hz, our DQN fails 18% "
+    "of the time vs Traditional's 26%.'",
+    "Slide 12 (live demo cue) — open Streamlit, drag κ from 0.8 "
+    "down to 0.2 in real-time and watch the Traditional bar shrink "
+    "while the DQN bar holds.",
 ])
 
 add_h3(doc, "If you have 5+ minutes  (best case)")
 add_bullets(doc, [
     "Slide 2 (the problem) — set the stage in 30 seconds.",
-    "Slide 3 (system model) — Alice/Bob/Eve, the AN trick, "
+    "Slide 3 (geometry sketch) — Alice/Bob/Eve, the AN trick, "
     "the κ formula.",
-    "Slide 5 (failure mode) — show the dip.",
+    "Slide 5 (BEFORE vs AFTER) — show the dip and the fix.",
     "Slide 7 (state and action) — quickly explain the agent sees "
     "κ and α.",
+    "Slide 11 (results table) — concrete numbers.",
     "Streamlit demo: live test → κ slider → outage tab.",
-    "Slide 12 (takeaways) — close with the three-card summary.",
+    "Slide 13 (takeaways) — close with the three-card summary.",
 ])
 
 

@@ -173,11 +173,11 @@ add_para(doc, "Time targets", bold=True)
 add_bullets(doc, [
     "Total presentation: 10–12 minutes.",
     "Slides 1–8: roughly 30–40 seconds each (one slide per ~½ minute).",
-    "Slides 9–10 (results): pace yourself slower (~1 minute each) "
+    "Slides 9–11 (results): pace yourself slower (~1 minute each) "
     "because these carry the punchline.",
-    "Slide 11 (live demo): aim for 2–3 minutes.",
-    "Slide 12 (takeaways): 30 seconds.",
-    "Slide 13 (Q&A): leave 1–2 minutes for questions at the end.",
+    "Slide 12 (live demo): aim for 2–3 minutes.",
+    "Slide 13 (takeaways): 30 seconds.",
+    "Slide 14 (Q&A): leave 1–2 minutes for questions at the end.",
 ])
 
 
@@ -493,8 +493,47 @@ add_say(doc,
 add_do(doc, "Advance to slide 11.")
 
 
-# === SLIDE 11: LIVE DEMO ===========================================
-add_h1(doc, "Slide 11  —  Live demo  (the moment of truth)")
+# === SLIDE 11: WITH vs WITHOUT AI -- RESULTS TABLE =================
+add_h1(doc, "Slide 11  —  With vs Without our AI  (the numbers slide)")
+add_para(doc, "Time: 50 seconds.  Pause and let the table sink in.",
+         italic=True)
+add_say(doc,
+    "All those plots boil down to a small set of numbers.  Here they "
+    "are in one place.  Five operating scenarios, all evaluated on "
+    "the SAME Monte Carlo channels.")
+add_point(doc, "the column headers, left to right.")
+add_say(doc,
+    "Two columns on the left under 'Without AI' — the fixed "
+    "rho-equals-half baseline, and the textbook Traditional "
+    "optimiser fed the noisy estimate.  Two columns on the right "
+    "under 'With AI' — our DQN, and the gain it gives over "
+    "Traditional.")
+add_point(doc, "the green DQN column.")
+add_say(doc,
+    "Notice the green DQN column is always equal to or larger than "
+    "the Traditional column on its left.  At every scenario, in "
+    "every condition we tested, our AI matches or beats the "
+    "Traditional optimiser.")
+add_point(doc, "the bottom (red-tinted) outage row.")
+add_say(doc,
+    "And the bottom row is the outage probability we discussed on "
+    "the last slide.  At a target rate of 4 bits per second per Hz, "
+    "Traditional fails 26% of the time, our DQN fails only 18% of "
+    "the time — a 30% relative reduction in failures at the same "
+    "target.")
+add_tangent(doc,
+    "Why is the gain only 0.03–0.08 bits/s/Hz?",
+    "Because Fixed at rho-equals-half is itself surprisingly close "
+    "to optimal in this MISO setting at moderate kappa — the "
+    "AN-averaged Rs curve is fairly flat near the peak.  The big "
+    "story isn't the magnitude of DQN's gain over Traditional; "
+    "it's that DQN never goes BELOW Fixed, while Traditional does.  "
+    "Robustness, not aggressive optimisation.")
+add_do(doc, "Advance to slide 12  (the live demo cue).")
+
+
+# === SLIDE 12: LIVE DEMO ===========================================
+add_h1(doc, "Slide 12  —  Live demo  (the moment of truth)")
 add_para(doc, "Time: 2.5 minutes.  This is the section that "
               "wins the room.", italic=True)
 add_say(doc,
@@ -563,7 +602,7 @@ add_say(doc,
     "picture — our channels are drawn at random with no spatial "
     "structure — so what you see here is illustrative, not "
     "literal physics.")
-add_do(doc, "Switch back to the slide deck.  Return to slide 12.")
+add_do(doc, "Switch back to the slide deck.  Advance to slide 13.")
 
 add_h2(doc, "If something breaks during the demo")
 add_bullets(doc, [
@@ -582,8 +621,8 @@ add_bullets(doc, [
 ])
 
 
-# === SLIDE 12: TAKEAWAYS ===========================================
-add_h1(doc, "Slide 12  —  Takeaways")
+# === SLIDE 13: TAKEAWAYS ===========================================
+add_h1(doc, "Slide 13  —  Takeaways")
 add_para(doc, "Time: 30 seconds.", italic=True)
 add_point(doc, "the THREE coloured cards in turn.")
 add_say(doc,
@@ -601,11 +640,11 @@ add_say(doc,
     "antenna count, every κ in the test set, and on the secrecy "
     "outage metric.  Training takes 38 seconds.  Inference is a "
     "single forward pass.")
-add_do(doc, "Advance to slide 13.")
+add_do(doc, "Advance to slide 14.")
 
 
-# === SLIDE 13: Q&A =================================================
-add_h1(doc, "Slide 13  —  Q&A")
+# === SLIDE 14: Q&A =================================================
+add_h1(doc, "Slide 14  —  Q&A")
 add_para(doc, "Time: as much as remains.", italic=True)
 add_say(doc,
     "Thank you.  Happy to take any questions.")
@@ -660,7 +699,8 @@ add_bullets(doc, [
 add_h3(doc, "If sir says 'just show me the result'")
 add_bullets(doc, [
     "Slide 5 (before/after).  Point at the red dip on the left, "
-    "then the green-stays-up on the right.  Done in 30 seconds.",
+    "then the green-stays-up on the right.  Done in 30 seconds.  "
+    "If sir wants numbers, jump to slide 11 (the table).",
 ])
 
 add_h3(doc, "If sir says 'show me it work live'")
