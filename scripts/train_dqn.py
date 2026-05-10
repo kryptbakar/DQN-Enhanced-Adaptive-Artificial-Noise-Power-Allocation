@@ -45,7 +45,7 @@ def _figure_path_for(Nt: int) -> str:
     return os.path.join(FIG_DIR, f"03_dqn_training_curve_nt{Nt}.png")
 
 
-def train_one(Nt: int, n_episodes: int = 5000, seed: int = 42) -> str:
+def train_one(Nt: int, n_episodes: int = 7000, seed: int = 42) -> str:
     """Train one DQN at the given Nt and save the weights. Returns model path."""
     os.makedirs(MODEL_DIR, exist_ok=True)
     os.makedirs(FIG_DIR, exist_ok=True)
@@ -55,8 +55,8 @@ def train_one(Nt: int, n_episodes: int = 5000, seed: int = 42) -> str:
         Nt=Nt,
         snr_db_min=0.0,
         snr_db_max=30.0,
-        kappa_min=0.2,
-        kappa_max=0.8,
+        kappa_min=0.1,
+        kappa_max=0.9,
         batch_size=64,
         buffer_size=10_000,
         warmup=200,
@@ -122,8 +122,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--nt", type=int, default=4,
                         help="Number of transmit antennas (default 4)")
-    parser.add_argument("--episodes", type=int, default=5000,
-                        help="Training episodes (default 5000)")
+    parser.add_argument("--episodes", type=int, default=7000,
+                        help="Training episodes (default 7000)")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     train_one(Nt=args.nt, n_episodes=args.episodes, seed=args.seed)

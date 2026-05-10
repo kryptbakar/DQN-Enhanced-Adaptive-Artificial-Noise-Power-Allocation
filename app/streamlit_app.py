@@ -1,29 +1,23 @@
 """
 Streamlit demonstrator for the DQN-AN power-allocation project.
 
+Audience-friendly version: every screen leads with a 1-sentence story,
+each scheme has a persona name (Naive / Mathematician / Smart Agent),
+and the technical labels live in tooltips and parentheses so the demo
+is readable to a mixed class while still rigorous for the instructor.
+
 Run from the repo root:
     streamlit run app/streamlit_app.py
 
 Five tabs:
-  1. Live demo       -- pick (Nt, SNR, kappa) and watch the three schemes
-                        evaluated on a fresh Monte Carlo channel batch.
-  2. SNR sweep       -- interactive recreation of figure 04.
-  3. Kappa sweep     -- interactive recreation of figure 06.
-  4. Outage          -- interactive recreation of figure 08, with a target-rate slider.
-  5. Geometry sketch -- conceptual Alice/Bob/Eve placement and beam direction.
+  1. Live test       -- pick a scenario and see who wins.
+  2. Power story     -- secrecy vs transmit power (SNR sweep).
+  3. Bad-intel test  -- THE HEADLINE -- secrecy vs CSI quality (kappa sweep).
+  4. How often it fails -- secrecy outage probability.
+  5. Picture of the setup -- conceptual Alice / Bob / Eve geometry.
 
-Performance notes
------------------
-* DQN models are loaded with @st.cache_resource so each (Nt) is loaded once.
-* Monte Carlo evaluations are wrapped in @st.cache_data keyed by all the
-  inputs that affect the result (Nt, SNR, kappa, n_channels, seed). Sliding
-  the same parameter back to a previous value is instant.
-* For sliders we default to n_channels=150 (subsecond on CPU). A "high
-  fidelity" toggle bumps to n_channels=600 for cleaner curves.
-
-The 2.5D geometry tab is intentionally decorative -- the simulator's channel
-is i.i.d. CN(0, I), with no spatial structure. The geometry plot is a
-conceptual aid, not a physical layout.
+All Monte Carlo evaluations are cached so the first slider drag is the
+slow one; later drags are instant.
 """
 
 from __future__ import annotations
@@ -41,14 +35,11 @@ import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
 
-from core.channel import (generate_rayleigh_channel,
-                          mrt_beamformer,
-                          null_space_projector)
+from core.channel import generate_rayleigh_channel
 from core.csi import imperfect_csi
-from core.secrecy import compute_secrecy_rate
 from core.schemes import (fixed_scheme, traditional_optimizer,
                           evaluate_scheme, make_dqn_scheme)
-from core.dqn_agent import DQNAgent, ACTION_RHOS
+from core.dqn_agent import DQNAgent
 from core.experiments import default_model_path
 
 
@@ -57,22 +48,44 @@ from core.experiments import default_model_path
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="DQN-AN Wiretap Demonstrator",
+    page_title="Wiretap Defender — DQN demo",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 
 # ---------------------------------------------------------------------------
+# Persona labels (kept in one place so they stay consistent across tabs)
+# ---------------------------------------------------------------------------
+
+NAIVE_LABEL = "Naive"          # Scheme 1, Fixed rho=0.5
+MATH_LABEL  = "Mathematician"  # Scheme 2, scipy optimiser on noisy CSI
+DQN_LABEL   = "Smart Agent"    # Scheme 3, our DQN
+
+NAIVE_FULL = "Naive (always 50/50)"
+MATH_FULL  = "Mathematician (trusts the noisy intel)"
+DQN_FULL   = "Smart Agent (our DQN)"
+
+COLORS = {
+    "fixed":       "#7f7f7f",   # grey
+    "traditional": "#c0504d",   # red
+    "dqn":         "#2ca02c",   # green
+}
+
+
+# ---------------------------------------------------------------------------
 # Cached helpers
 # ---------------------------------------------------------------------------
 
-@st.cache_resource(show_spinner="Loading DQN weights...")
+@st.cache_resource(show_spinner="Loading the trained model...")
 def load_dqn_for(Nt: int):
     """Load (and cache) the DQN trained at Nt. Returns (scheme, ok, msg)."""
     path = default_model_path(Nt)
     if not os.path.isfile(path):
-        return None, False, f"No DQN found at `{path}`. Train it with `python scripts/train_dqn.py --nt {Nt}`."
+        return None, False, (
+            f"No trained model found at `{path}`. "
+            f"Train it first with `python scripts/train_dqn.py --nt {Nt}`."
+        )
     agent = DQNAgent()
     agent.load(path)
     return make_dqn_scheme(agent), True, f"Loaded `{path}`."
@@ -83,7 +96,7 @@ def _sample_channels(Nt: int, n: int, rng: np.random.Generator):
              generate_rayleigh_channel(Nt, rng)) for _ in range(n)]
 
 
-@st.cache_data(show_spinner="Running Monte Carlo...")
+@st.cache_data(show_spinner="Running the test...")
 def eval_point(Nt: int, snr_db: float, kappa: float,
                n_channels: int, seed: int) -> dict:
     """
@@ -108,12 +121,12 @@ def eval_point(Nt: int, snr_db: float, kappa: float,
     for j, (hB, hE) in enumerate(chans):
         hE_n = imperfect_csi(hE, kappa, rng)
         rho_fix[j], rs_fix[j] = evaluate_scheme(fixed_scheme,
-                                                hB, hE, hE_n, snr_lin)
+                                                hB, hE, hE_n, snr_lin, kappa)
         rho_trd[j], rs_trd[j] = evaluate_scheme(traditional_optimizer,
-                                                hB, hE, hE_n, snr_lin)
+                                                hB, hE, hE_n, snr_lin, kappa)
         if dqn_ok:
             rho_dqn[j], rs_dqn[j] = evaluate_scheme(dqn_scheme,
-                                                    hB, hE, hE_n, snr_lin)
+                                                    hB, hE, hE_n, snr_lin, kappa)
 
     return {
         "rs_fixed": rs_fix, "rs_traditional": rs_trd, "rs_dqn": rs_dqn,
@@ -122,7 +135,7 @@ def eval_point(Nt: int, snr_db: float, kappa: float,
     }
 
 
-@st.cache_data(show_spinner="Running SNR sweep...")
+@st.cache_data(show_spinner="Sweeping power...")
 def eval_snr_sweep(Nt: int, kappa: float, snr_db_min: float,
                    snr_db_max: float, n_points: int,
                    n_channels: int, seed: int) -> dict:
@@ -143,7 +156,7 @@ def eval_snr_sweep(Nt: int, kappa: float, snr_db_min: float,
             "rs_dqn": means_dqn if dqn_ok_any else None}
 
 
-@st.cache_data(show_spinner="Running kappa sweep...")
+@st.cache_data(show_spinner="Sweeping intel quality...")
 def eval_kappa_sweep(Nt: int, snr_db: float, n_points: int,
                      n_channels: int, seed: int) -> dict:
     ks = np.linspace(0.0, 1.0, n_points)
@@ -164,13 +177,8 @@ def eval_kappa_sweep(Nt: int, snr_db: float, n_points: int,
 
 
 # ---------------------------------------------------------------------------
-# Plot helpers (Plotly)
+# Plot helper
 # ---------------------------------------------------------------------------
-
-COLORS = {"fixed": "#7f7f7f",
-          "traditional": "#c0504d",
-          "dqn": "#2ca02c"}
-
 
 def lineplot(x, ys: dict, x_title: str, y_title: str, title: str = ""):
     fig = go.Figure()
@@ -179,79 +187,130 @@ def lineplot(x, ys: dict, x_title: str, y_title: str, title: str = ""):
             continue
         fig.add_trace(go.Scatter(x=x, y=y, mode="lines+markers",
                                  name=label,
-                                 line=dict(color=COLORS[key], width=2.5),
-                                 marker=dict(size=7)))
+                                 line=dict(color=COLORS[key], width=2.8),
+                                 marker=dict(size=8)))
     fig.update_layout(xaxis_title=x_title, yaxis_title=y_title,
                       title=title, template="plotly_white",
-                      legend=dict(orientation="h", y=-0.18),
+                      legend=dict(orientation="h", y=-0.22),
                       height=460, margin=dict(l=10, r=10, t=40, b=10))
     return fig
 
 
 # ---------------------------------------------------------------------------
-# Sidebar (global controls)
+# Sidebar
 # ---------------------------------------------------------------------------
 
-st.sidebar.title("Wiretap demonstrator")
-st.sidebar.caption("DQN-enhanced AN power allocation under imperfect CSI.")
+st.sidebar.title("Wiretap Defender")
+st.sidebar.caption(
+    "Alice talks to Bob. Eve listens. Alice splits her power "
+    "between the message and a jamming signal aimed at Eve. "
+    "Three strategies, one question: who keeps the secret best?"
+)
 
 with st.sidebar:
-    Nt = st.selectbox("Antenna count Nt",
-                      options=[2, 4, 8], index=1,
-                      help="MRT beamforming + null-space AN dimension Nt-1.")
-    seed = st.number_input("Random seed", min_value=0, max_value=10_000,
-                           value=2026, step=1)
-    high_fid = st.toggle("High-fidelity Monte Carlo",
-                         value=False,
-                         help="More channels per estimate (slower, smoother).")
+    Nt = st.selectbox(
+        "Number of antennas Alice has",
+        options=[2, 4, 8], index=2,
+        help="More antennas = sharper aim at Bob and more room to "
+             "jam Eve without disturbing Bob. (Technical name: Nt.) "
+             "The Smart Agent's edge widens with Nt, since it has more "
+             "channel geometry to exploit per decision."
+    )
+    seed = st.number_input(
+        "Scenario seed",
+        min_value=0, max_value=10_000, value=2026, step=1,
+        help="Same seed = same random channels. Change for a fresh roll."
+    )
+    high_fid = st.toggle(
+        "Slower but smoother",
+        value=False,
+        help="Run more channel samples per evaluation. "
+             "Charts look cleaner but each slider drag takes longer."
+    )
     n_chan_live  = 600 if high_fid else 150
     n_chan_sweep = 300 if high_fid else 80
 
     st.divider()
     dqn_scheme, dqn_ok, dqn_msg = load_dqn_for(Nt)
     if dqn_ok:
-        st.success(f"DQN @ Nt={Nt} loaded.")
+        st.success(f"Smart Agent ready (trained for {Nt}-antenna setup).")
     else:
         st.warning(dqn_msg)
 
-    with st.expander("About this project"):
+    with st.expander("What's actually happening here?"):
         st.markdown(
-            "Three schemes for splitting Alice's transmit power between "
-            "the signal beam (toward Bob) and artificial noise injected "
-            "in Bob's null space (jamming Eve):\n\n"
-            "* **Fixed** — `rho = 0.5` (Goel & Negi 2008).\n"
-            "* **Traditional** — `argmax Rs(rho)` using the noisy estimate "
-            "of Eve's channel; matches the perfect-CSI optimum at kappa=1.\n"
-            "* **DQN** — trained Q-network picks rho from a 5-dim state "
-            "containing the noisy CSI features. Learned policy from "
-            "5000 random-(SNR, kappa) episodes.\n\n"
-            "The DQN is trained per-Nt; the active model file is "
-            f"`{default_model_path(Nt)}`."
+            "**The setting.** Alice has multiple antennas; Bob and Eve "
+            "have one each. Alice forms a focused beam at Bob and "
+            "sprays artificial noise everywhere else. Bob hears a clean "
+            "signal because the noise is steered to cancel at his "
+            "location; Eve hears signal-plus-noise.\n\n"
+            "**The knob.** rho is the fraction of power on the message "
+            "(the rest is jamming). Pick rho too high — not enough jam, "
+            "Eve hears clearly. Pick it too low — Bob can't even hear "
+            "the message. The right rho depends on the channel.\n\n"
+            "**The catch.** Alice doesn't actually know Eve's channel "
+            "perfectly. We model her intel quality as kappa in [0, 1]: "
+            "1 means perfect, 0 means pure guessing.\n\n"
+            "**The contest.** Three strategies pick rho:\n"
+            "- **Naive** always picks 50/50 (Goel & Negi 2008).\n"
+            "- **Mathematician** trusts the noisy intel and optimises.\n"
+            "- **Smart Agent** is a neural net trained over random "
+            "intel quality — it learned that bad intel is normal."
         )
 
 
 # ---------------------------------------------------------------------------
-# Main tabs
+# Header banner
+# ---------------------------------------------------------------------------
+
+st.title("Wiretap Defender")
+st.markdown(
+    "**One question:** when Alice has only a noisy guess of Eve's channel, "
+    "who keeps the secret best — Naive, Mathematician, or Smart Agent? "
+    "Click through the tabs in order; the **Bad-intel test** is the headline."
+)
+
+
+# ---------------------------------------------------------------------------
+# Tabs
 # ---------------------------------------------------------------------------
 
 tab_live, tab_snr, tab_kappa, tab_outage, tab_geom = st.tabs([
-    "Live demo", "SNR sweep", "Kappa sweep", "Outage", "Geometry sketch",
+    "1. Live test",
+    "2. Power story",
+    "3. Bad-intel test  (the headline)",
+    "4. How often it fails",
+    "5. Picture of the setup",
 ])
 
 
-# ---- Tab 1: Live demo ----------------------------------------------------
+# ---- Tab 1: Live test ----------------------------------------------------
 with tab_live:
-    st.subheader("Live three-scheme comparison")
-    st.caption("Pick a single operating point and watch the schemes "
-               "evaluated on a fresh batch of channels.")
+    st.subheader("Pick a scenario, see who keeps the secret best.")
+    st.markdown(
+        "Set the **transmit power** and the **intel quality**. "
+        "We run all three strategies on the same batch of fresh "
+        "random channels. The bar chart below shows the average "
+        "secrecy rate each one achieves. **Higher is better.**"
+    )
 
     c1, c2 = st.columns([1, 1])
     with c1:
-        snr_db = st.slider("Transmit SNR (dB)", 0.0, 30.0, 15.0, 0.5,
-                           key="live_snr")
+        snr_db = st.slider(
+            "Transmit power (dB)",
+            0.0, 30.0, 15.0, 0.5,
+            key="live_snr",
+            help="How loud Alice transmits, in dB. "
+                 "Higher = louder = more total power available."
+        )
     with c2:
-        kappa = st.slider("CSI quality kappa", 0.0, 1.0, 0.4, 0.05,
-                          key="live_kappa")
+        kappa = st.slider(
+            "Alice's intel quality on Eve  (1 = perfect, 0 = guessing)",
+            0.0, 1.0, 0.4, 0.05,
+            key="live_kappa",
+            help="Technical name: kappa. Controls how noisy Alice's "
+                 "estimate of Eve's channel is."
+        )
 
     out = eval_point(Nt, snr_db, kappa, n_chan_live, seed)
     rs_fix = float(out["rs_fixed"].mean())
@@ -259,110 +318,202 @@ with tab_live:
     rs_dqn = float(out["rs_dqn"].mean()) if out["dqn_ok"] else float("nan")
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Scheme 1 — Fixed (rho=0.5)", f"{rs_fix:.3f}", "bits/s/Hz")
-    m2.metric("Scheme 2 — Traditional",     f"{rs_trd:.3f}",
-              f"{rs_trd - rs_fix:+.3f} vs Fixed")
+    m1.metric(NAIVE_FULL, f"{rs_fix:.3f}", "secret bits / sec / Hz")
+    m2.metric(MATH_FULL, f"{rs_trd:.3f}",
+              f"{rs_trd - rs_fix:+.3f} vs Naive")
     if out["dqn_ok"]:
-        m3.metric("Scheme 3 — DQN",
-                  f"{rs_dqn:.3f}",
-                  f"{rs_dqn - rs_fix:+.3f} vs Fixed")
+        m3.metric(DQN_FULL, f"{rs_dqn:.3f}",
+                  f"{rs_dqn - rs_fix:+.3f} vs Naive")
     else:
-        m3.metric("Scheme 3 — DQN", "—", "no model for this Nt")
-    m4.metric("Channels evaluated", f"{n_chan_live}",
-              "(toggle high-fidelity in sidebar)")
+        m3.metric(DQN_FULL, "—", "no model for this antenna count")
+    m4.metric("Channels tested", f"{n_chan_live}",
+              "(toggle slow/smooth in sidebar)")
 
-    # Bar plot of mean Rs
+    # Bar plot — winner highlighted
     bar = go.Figure()
-    names = ["Fixed", "Traditional", "DQN"]
+    names = [NAIVE_LABEL, MATH_LABEL, DQN_LABEL]
     vals  = [rs_fix, rs_trd, rs_dqn]
     keys  = ["fixed", "traditional", "dqn"]
     bar.add_trace(go.Bar(x=names, y=vals,
                          marker_color=[COLORS[k] for k in keys],
                          text=[f"{v:.3f}" for v in vals],
-                         textposition="outside"))
-    bar.update_layout(yaxis_title="Mean Rs  (bits/s/Hz)",
-                      template="plotly_white",
-                      height=380, margin=dict(l=10, r=10, t=20, b=10),
-                      showlegend=False)
+                         textposition="outside",
+                         textfont=dict(size=14)))
+    bar.update_layout(
+        yaxis_title="Average secret bits per second per Hz  (higher = better)",
+        template="plotly_white",
+        height=400, margin=dict(l=10, r=10, t=20, b=10),
+        showlegend=False,
+    )
     st.plotly_chart(bar, width="stretch")
 
+    # Story callout
+    if out["dqn_ok"]:
+        if rs_dqn >= rs_trd and rs_dqn >= rs_fix - 0.01:
+            st.success(
+                f"**Smart Agent wins or ties** at this scenario. "
+                f"Beat Naive by **{rs_dqn - rs_fix:+.3f} bits/s/Hz** and "
+                f"beat Mathematician by **{rs_dqn - rs_trd:+.3f}**. "
+                "Try dragging the intel quality lower to see the gap grow."
+            )
+        elif rs_trd < rs_fix:
+            st.warning(
+                "**Mathematician is losing to Naive here.** "
+                "This is the failure mode our project is designed around: "
+                "trusting bad intel is worse than ignoring it."
+            )
+
     # rho-distribution histograms
-    st.markdown("**What rho does each scheme actually pick?**")
+    st.markdown("#### What did each strategy decide to do?")
+    st.caption(
+        "Each histogram shows how often that strategy picked each rho "
+        "value across the channel batch. rho is the fraction of power "
+        "on the message (1 - rho goes into jamming Eve)."
+    )
     h1, h2, h3 = st.columns(3)
 
     def _rho_hist(col, rhos, label, color):
-        fig = go.Figure(go.Histogram(x=rhos, xbins=dict(start=0.05, end=0.95, size=0.1),
-                                     marker_color=color))
+        fig = go.Figure(go.Histogram(
+            x=rhos, xbins=dict(start=0.05, end=0.95, size=0.1),
+            marker_color=color))
         fig.update_layout(title=label, template="plotly_white",
                           height=260, margin=dict(l=10, r=10, t=30, b=10),
-                          xaxis_title="rho",
-                          yaxis_title="count")
+                          xaxis_title="power on message (rho)",
+                          yaxis_title="how often")
         col.plotly_chart(fig, width="stretch")
 
-    _rho_hist(h1, out["rho_fixed"],       "Fixed",       COLORS["fixed"])
-    _rho_hist(h2, out["rho_traditional"], "Traditional", COLORS["traditional"])
+    _rho_hist(h1, out["rho_fixed"],       NAIVE_LABEL,      COLORS["fixed"])
+    _rho_hist(h2, out["rho_traditional"], MATH_LABEL,       COLORS["traditional"])
     if out["dqn_ok"]:
-        _rho_hist(h3, out["rho_dqn"],     "DQN",         COLORS["dqn"])
+        _rho_hist(h3, out["rho_dqn"],     DQN_LABEL,        COLORS["dqn"])
     else:
-        h3.info("No DQN model for this Nt.")
+        h3.info("No Smart Agent model for this antenna count.")
 
 
-# ---- Tab 2: SNR sweep ----------------------------------------------------
+# ---- Tab 2: Power story --------------------------------------------------
 with tab_snr:
-    st.subheader("Average secrecy rate vs transmit SNR")
-    kappa_snr = st.slider("CSI quality kappa", 0.0, 1.0, 0.4, 0.05,
-                          key="snr_kappa")
-    snr_lo, snr_hi = st.slider("SNR range (dB)",
-                               -5.0, 35.0, (0.0, 30.0), 1.0)
-    n_points = st.slider("Sweep resolution", 5, 25, 11)
+    st.subheader("How does the secret rate change as Alice transmits louder?")
+    st.markdown(
+        "Sweep the transmit power across a range and watch the three "
+        "strategies. **All three should rise** as power grows. The "
+        "interesting part is the spacing between them at each power level."
+    )
+
+    kappa_snr = st.slider(
+        "Alice's intel quality on Eve  (1 = perfect, 0 = guessing)",
+        0.0, 1.0, 0.4, 0.05,
+        key="snr_kappa",
+    )
+    snr_lo, snr_hi = st.slider(
+        "Power range to sweep (dB)",
+        -5.0, 35.0, (0.0, 30.0), 1.0,
+    )
+    n_points = st.slider("Resolution of the sweep", 5, 25, 11)
 
     res = eval_snr_sweep(Nt, kappa_snr, float(snr_lo), float(snr_hi),
                          n_points, n_chan_sweep, seed)
-    fig = lineplot(res["snr_db"],
-                   {"Scheme 1: Fixed":       (res["rs_fixed"], "fixed"),
-                    "Scheme 2: Traditional": (res["rs_traditional"], "traditional"),
-                    f"Scheme 3: DQN @ Nt={Nt}": (res["rs_dqn"], "dqn")},
-                   "Transmit SNR (dB)",
-                   "Mean Rs (bits/s/Hz)",
-                   title=f"Nt={Nt}, kappa={kappa_snr:.2f}, "
-                         f"{n_chan_sweep} channels per point")
+    fig = lineplot(
+        res["snr_db"],
+        {NAIVE_FULL:  (res["rs_fixed"], "fixed"),
+         MATH_FULL:   (res["rs_traditional"], "traditional"),
+         DQN_FULL:    (res["rs_dqn"], "dqn")},
+        "Transmit power (dB)",
+        "Average secret bits / sec / Hz  (higher = better)",
+        title=f"{Nt}-antenna Alice, intel quality = {kappa_snr:.2f}, "
+              f"{n_chan_sweep} channels per point",
+    )
     st.plotly_chart(fig, width="stretch")
-    st.caption("Same family of curves as figures/04_three_scheme_comparison.png "
-               "but for any (Nt, kappa) you choose.")
+    st.info(
+        "Reading the chart: at low intel quality (try kappa = 0.2), "
+        "the green Smart Agent line should sit at or above the grey "
+        "Naive line everywhere, while the red Mathematician line "
+        "dips below grey across the middle of the power range. "
+        "That's the headline story in numbers."
+    )
 
 
-# ---- Tab 3: Kappa sweep --------------------------------------------------
+# ---- Tab 3: Bad-intel test (THE HEADLINE) -------------------------------
 with tab_kappa:
-    st.subheader("Average secrecy rate vs CSI quality kappa")
-    snr_kap = st.slider("Transmit SNR (dB)", 0.0, 30.0, 15.0, 0.5,
-                        key="kap_snr")
-    n_points_k = st.slider("Sweep resolution", 5, 21, 11, key="kap_npts")
+    st.subheader("THE HEADLINE: what happens as Alice's intel gets noisier?")
+    st.markdown(
+        "Hold the transmit power fixed and **drag intel quality from "
+        "1 (perfect) down to 0 (pure guessing)**. Watch the lines move."
+    )
+
+    snr_kap = st.slider(
+        "Transmit power (dB)",
+        0.0, 30.0, 15.0, 0.5,
+        key="kap_snr",
+    )
+    n_points_k = st.slider(
+        "Resolution of the sweep", 5, 21, 11, key="kap_npts"
+    )
 
     res = eval_kappa_sweep(Nt, snr_kap, n_points_k, n_chan_sweep, seed)
-    fig = lineplot(res["kappa"],
-                   {"Scheme 1: Fixed":       (res["rs_fixed"], "fixed"),
-                    "Scheme 2: Traditional": (res["rs_traditional"], "traditional"),
-                    f"Scheme 3: DQN @ Nt={Nt}": (res["rs_dqn"], "dqn")},
-                   "CSI quality kappa",
-                   "Mean Rs (bits/s/Hz)",
-                   title=f"Nt={Nt}, SNR={snr_kap:.0f} dB, "
-                         f"{n_chan_sweep} channels per point")
+    fig = lineplot(
+        res["kappa"],
+        {NAIVE_FULL:  (res["rs_fixed"], "fixed"),
+         MATH_FULL:   (res["rs_traditional"], "traditional"),
+         DQN_FULL:    (res["rs_dqn"], "dqn")},
+        "Alice's intel quality on Eve  (1 = perfect, 0 = guessing)",
+        "Average secret bits / sec / Hz  (higher = better)",
+        title=f"{Nt}-antenna Alice, transmit power = {snr_kap:.0f} dB, "
+              f"{n_chan_sweep} channels per point",
+    )
     st.plotly_chart(fig, width="stretch")
-    st.caption("Lower kappa = more CSI noise. Traditional collapses fastest "
-               "when its only input is being lied to; DQN was trained under "
-               "random kappa so it stays flatter.")
+
+    # Compute crossover point if Math drops below Naive
+    if res["rs_dqn"] is not None:
+        diff = res["rs_traditional"] - res["rs_fixed"]
+        crossover_idx = None
+        for i in range(1, len(diff)):
+            if diff[i-1] >= 0 and diff[i] < 0:
+                crossover_idx = i
+                break
+
+        if crossover_idx is not None:
+            kx = res["kappa"][crossover_idx]
+            st.error(
+                f"**Look at this:** the red Mathematician line crosses "
+                f"BELOW the grey Naive baseline near intel quality "
+                f"= {kx:.2f}. From that point onward, "
+                f"**trusting the math actively hurts you** -- you'd be "
+                f"better off ignoring the intel and just splitting "
+                f"power 50/50. The green Smart Agent line never crosses "
+                f"below grey, because it was trained over random intel "
+                f"quality and learned to expect bad intel."
+            )
+        else:
+            st.info(
+                "At this power level the gap between strategies is small. "
+                "Try a higher transmit power (try 20+ dB) and the "
+                "Mathematician's collapse at low intel quality becomes "
+                "very visible."
+            )
 
 
-# ---- Tab 4: Outage -------------------------------------------------------
+# ---- Tab 4: How often it fails ------------------------------------------
 with tab_outage:
-    st.subheader("Empirical secrecy outage probability  P(Rs < R0)")
+    st.subheader("How often does each strategy fail to meet a target rate?")
+    st.markdown(
+        "An *outage* happens when the secret rate falls below a target "
+        "you care about. We measure the fraction of channels where each "
+        "strategy fails. **Lower curves are better.**"
+    )
+
     co1, co2 = st.columns(2)
     with co1:
-        snr_o = st.slider("Transmit SNR (dB)", 0.0, 30.0, 15.0, 0.5,
-                          key="out_snr")
+        snr_o = st.slider(
+            "Transmit power (dB)",
+            0.0, 30.0, 15.0, 0.5,
+            key="out_snr",
+        )
     with co2:
-        kappa_o = st.slider("CSI quality kappa", 0.0, 1.0, 0.4, 0.05,
-                            key="out_kappa")
+        kappa_o = st.slider(
+            "Alice's intel quality on Eve",
+            0.0, 1.0, 0.4, 0.05,
+            key="out_kappa",
+        )
 
     out = eval_point(Nt, snr_o, kappa_o, n_chan_live, seed)
     r0 = np.linspace(0.0, 8.0, 33)
@@ -371,42 +522,60 @@ with tab_outage:
     sop_dqn = ([float(np.mean(out["rs_dqn"] < r)) for r in r0]
                if out["dqn_ok"] else None)
 
-    fig = lineplot(r0,
-                   {"Scheme 1: Fixed":       (sop_fix, "fixed"),
-                    "Scheme 2: Traditional": (sop_trd, "traditional"),
-                    f"Scheme 3: DQN @ Nt={Nt}": (sop_dqn, "dqn")},
-                   "Target secrecy rate R0 (bits/s/Hz)",
-                   "P(Rs < R0)",
-                   title=f"Nt={Nt}, SNR={snr_o:.0f} dB, kappa={kappa_o:.2f}, "
-                         f"{n_chan_live} channels")
+    fig = lineplot(
+        r0,
+        {NAIVE_FULL:  (sop_fix, "fixed"),
+         MATH_FULL:   (sop_trd, "traditional"),
+         DQN_FULL:    (sop_dqn, "dqn")},
+        "Target rate Alice needs to hit  (bits / sec / Hz)",
+        "Probability of failing to hit it  (lower = better)",
+        title=f"{Nt}-antenna Alice, power = {snr_o:.0f} dB, "
+              f"intel quality = {kappa_o:.2f}, "
+              f"{n_chan_live} channels",
+    )
     fig.update_yaxes(range=[-0.02, 1.02])
     st.plotly_chart(fig, width="stretch")
 
-    target = st.slider("Pick a target R0 (bits/s/Hz) to read off SOP",
-                       0.0, 8.0, 2.0, 0.1)
+    target = st.slider(
+        "Pick a target rate to read off failure probability",
+        0.0, 8.0, 2.0, 0.1,
+    )
     j = int(np.argmin(np.abs(r0 - target)))
     cm1, cm2, cm3 = st.columns(3)
-    cm1.metric(f"SOP @ R0={r0[j]:.2f} — Fixed",       f"{sop_fix[j]:.3f}")
-    cm2.metric(f"SOP @ R0={r0[j]:.2f} — Traditional", f"{sop_trd[j]:.3f}")
+    cm1.metric(f"{NAIVE_LABEL}: fails at R={r0[j]:.2f}",
+               f"{sop_fix[j]:.1%}")
+    cm2.metric(f"{MATH_LABEL}: fails at R={r0[j]:.2f}",
+               f"{sop_trd[j]:.1%}")
     if sop_dqn is not None:
-        cm3.metric(f"SOP @ R0={r0[j]:.2f} — DQN",     f"{sop_dqn[j]:.3f}")
+        cm3.metric(f"{DQN_LABEL}: fails at R={r0[j]:.2f}",
+                   f"{sop_dqn[j]:.1%}")
+
+    st.caption(
+        "Reading the metrics: pick a target rate (say 3 bits/s/Hz). "
+        "The percentage shows how often each strategy fails to deliver "
+        "at least that much secret rate over the channel set."
+    )
 
 
-# ---- Tab 5: Geometry sketch ----------------------------------------------
+# ---- Tab 5: Picture of the setup ----------------------------------------
 with tab_geom:
-    st.subheader("Conceptual Alice / Bob / Eve geometry")
-    st.caption("Channel realisations in this simulator are i.i.d. CN(0, I) "
-               "and have **no spatial structure** -- this view is purely "
-               "illustrative. The MRT beam direction and AN cone visualise "
-               "*what the math is doing*, not where signals literally go.")
+    st.subheader("Conceptual picture of who's where")
+    st.caption(
+        "This is a sketch, not a physics simulation. Our channels are "
+        "drawn at random with no spatial structure -- this view exists "
+        "so you can see what the math is doing, not where signals "
+        "literally travel."
+    )
 
     cgo1, cgo2 = st.columns(2)
     with cgo1:
-        bob_angle = st.slider("Bob azimuth (deg)", -180.0, 180.0, 30.0, 5.0)
-        bob_dist  = st.slider("Bob distance",       0.5,    5.0, 2.5, 0.1)
+        bob_angle = st.slider("Bob's direction (degrees)",
+                              -180.0, 180.0, 30.0, 5.0)
+        bob_dist  = st.slider("Bob's distance",       0.5, 5.0, 2.5, 0.1)
     with cgo2:
-        eve_angle = st.slider("Eve azimuth (deg)",  -180.0, 180.0, -45.0, 5.0)
-        eve_dist  = st.slider("Eve distance",       0.5,    5.0, 3.2, 0.1)
+        eve_angle = st.slider("Eve's direction (degrees)",
+                              -180.0, 180.0, -45.0, 5.0)
+        eve_dist  = st.slider("Eve's distance",       0.5, 5.0, 3.2, 0.1)
 
     rng = np.random.default_rng(seed)
     hB = generate_rayleigh_channel(Nt, rng)
@@ -415,57 +584,66 @@ with tab_geom:
     rho_trad = traditional_optimizer(hB, hE, snr_lin)
     if dqn_ok:
         dqn_scheme.reset()
-        rho_d = dqn_scheme(hB, hE, snr_lin)
+        # geometry tab: assume perfect CSI (kappa=1.0) for the illustrative
+        # one-shot pick — there's no noisy estimate generated here.
+        rho_d = dqn_scheme(hB, hE, snr_lin, 1.0)
     else:
         rho_d = float("nan")
 
     fig = go.Figure()
-    # Alice antenna array along y-axis
     ant_x = np.zeros(Nt)
     ant_y = np.linspace(-0.3, 0.3, Nt)
-    fig.add_trace(go.Scatter(x=ant_x, y=ant_y, mode="markers+text",
-                             marker=dict(size=12, color="#1f4e79",
-                                         line=dict(color="white", width=1)),
-                             text=[f"a{i+1}" for i in range(Nt)],
-                             textposition="middle right",
-                             name="Alice (Nt antennas)"))
+    fig.add_trace(go.Scatter(
+        x=ant_x, y=ant_y, mode="markers+text",
+        marker=dict(size=12, color="#1f4e79",
+                    line=dict(color="white", width=1)),
+        text=[f"a{i+1}" for i in range(Nt)],
+        textposition="middle right",
+        name=f"Alice ({Nt} antennas)"))
 
     bx, by = bob_dist * np.cos(np.deg2rad(bob_angle)), bob_dist * np.sin(np.deg2rad(bob_angle))
     ex, ey = eve_dist * np.cos(np.deg2rad(eve_angle)), eve_dist * np.sin(np.deg2rad(eve_angle))
-    fig.add_trace(go.Scatter(x=[bx], y=[by], mode="markers+text",
-                             marker=dict(size=18, color="#2ca02c", symbol="diamond"),
-                             text=["Bob"], textposition="top center",
-                             name="Bob (legitimate Rx)"))
-    fig.add_trace(go.Scatter(x=[ex], y=[ey], mode="markers+text",
-                             marker=dict(size=18, color="#c0504d", symbol="x"),
-                             text=["Eve"], textposition="top center",
-                             name="Eve (eavesdropper)"))
+    fig.add_trace(go.Scatter(
+        x=[bx], y=[by], mode="markers+text",
+        marker=dict(size=18, color="#2ca02c", symbol="diamond"),
+        text=["Bob"], textposition="top center",
+        name="Bob (legitimate listener)"))
+    fig.add_trace(go.Scatter(
+        x=[ex], y=[ey], mode="markers+text",
+        marker=dict(size=18, color="#c0504d", symbol="x"),
+        text=["Eve"], textposition="top center",
+        name="Eve (eavesdropper)"))
 
-    # MRT beam toward Bob
     fig.add_annotation(x=bx, y=by, ax=0, ay=0,
                        xref="x", yref="y", axref="x", ayref="y",
                        showarrow=True, arrowhead=3, arrowsize=1.4,
                        arrowwidth=2.5, arrowcolor="#2ca02c")
-    # AN "leakage" arrow toward Eve (faint)
     fig.add_annotation(x=ex, y=ey, ax=0, ay=0,
                        xref="x", yref="y", axref="x", ayref="y",
                        showarrow=True, arrowhead=2, arrowsize=1.0,
                        arrowwidth=1.5, arrowcolor="rgba(192,80,77,0.45)")
 
-    fig.update_layout(template="plotly_white",
-                      xaxis=dict(scaleanchor="y", range=[-5.5, 5.5],
-                                 zeroline=False, showgrid=True),
-                      yaxis=dict(range=[-5.5, 5.5],
-                                 zeroline=False, showgrid=True),
-                      height=520, margin=dict(l=10, r=10, t=40, b=10),
-                      legend=dict(orientation="h", y=-0.15),
-                      title=f"Nt = {Nt}  |  one channel realisation, seed={seed}")
+    fig.update_layout(
+        template="plotly_white",
+        xaxis=dict(scaleanchor="y", range=[-5.5, 5.5],
+                   zeroline=False, showgrid=True),
+        yaxis=dict(range=[-5.5, 5.5],
+                   zeroline=False, showgrid=True),
+        height=520, margin=dict(l=10, r=10, t=40, b=10),
+        legend=dict(orientation="h", y=-0.15),
+        title=f"Alice with {Nt} antennas — one random scenario, seed {seed}")
     st.plotly_chart(fig, width="stretch")
 
     g1, g2, g3 = st.columns(3)
-    g1.metric("rho — Fixed",       "0.50")
-    g2.metric("rho — Traditional", f"{rho_trad:.3f}")
+    g1.metric(f"{NAIVE_LABEL} picks rho", "0.50")
+    g2.metric(f"{MATH_LABEL} picks rho", f"{rho_trad:.3f}")
     if dqn_ok:
-        g3.metric("rho — DQN",     f"{rho_d:.3f}")
+        g3.metric(f"{DQN_LABEL} picks rho",  f"{rho_d:.3f}")
     else:
-        g3.metric("rho — DQN", "—")
+        g3.metric(f"{DQN_LABEL} picks rho",  "—")
+
+    st.caption(
+        "The green arrow is Alice's beam toward Bob. The faint red "
+        "arrow shows where some signal still leaks toward Eve -- that's "
+        "what the artificial noise is designed to drown out."
+    )
