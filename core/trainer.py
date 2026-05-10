@@ -47,12 +47,12 @@ REWARD_SCALE: float = 10.0     # multiply raw Rs by this before using as reward
 
 @dataclass
 class TrainingConfig:
-    n_episodes: int = 5000
+    n_episodes: int = 7000
     Nt: int = 4
     snr_db_min: float = 0.0
     snr_db_max: float = 30.0
-    kappa_min: float = 0.2
-    kappa_max: float = 0.8
+    kappa_min: float = 0.1
+    kappa_max: float = 0.9
 
     batch_size: int = 64
     buffer_size: int = 10_000
@@ -122,7 +122,7 @@ def train(cfg: TrainingConfig | None = None
         snr_lin = 10.0 ** (snr_db / 10.0)
         hE_est = imperfect_csi(hE, kappa, rng)
 
-        state = build_state(hB, hE_est, snr_db, last_rho, last_rs)
+        state = build_state(hB, hE_est, snr_db, last_rho, last_rs, kappa)
 
         # ---- act ----
         eps = _epsilon_at(ep, cfg)

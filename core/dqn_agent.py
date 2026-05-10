@@ -48,9 +48,9 @@ from tensorflow.keras import layers
 # Action space
 # ---------------------------------------------------------------------------
 
-ACTION_RHOS: np.ndarray = np.round(np.arange(0.1, 0.91, 0.1), 2)  # 9 actions
+ACTION_RHOS: np.ndarray = np.round(np.arange(0.05, 0.86, 0.05), 2)  # 17 actions
 N_ACTIONS: int = len(ACTION_RHOS)
-STATE_DIM: int = 5
+STATE_DIM: int = 7
 
 
 def action_to_rho(action: int) -> float:

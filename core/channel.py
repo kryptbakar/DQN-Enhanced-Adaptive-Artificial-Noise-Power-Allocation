@@ -42,10 +42,12 @@ def mrt_beamformer(hB: np.ndarray) -> np.ndarray:
     """
     Maximum-Ratio-Transmission (MRT) beamforming vector pointing toward Bob.
 
-        w = hB* / ||hB||
+        w = hB / ||hB||
 
-    This is the unit-norm direction that maximises |hB^H w|^2 = ||hB||^2,
-    i.e. it puts all of the signal power on Bob's channel.
+    Under the standard wireless convention y = h^H x + n, this is the
+    unit-norm direction that maximises |hB^H w|^2, by Cauchy-Schwarz, with
+    maximum value ||hB||^2. All of the signal power then arrives at Bob,
+    while every direction orthogonal to hB sees zero signal contribution.
 
     Args:
         hB: Bob's channel vector, shape (Nt,).
@@ -53,7 +55,7 @@ def mrt_beamformer(hB: np.ndarray) -> np.ndarray:
     Returns:
         Unit-norm beamforming vector w, shape (Nt,).
     """
-    return np.conj(hB) / np.linalg.norm(hB)
+    return hB / np.linalg.norm(hB)
 
 
 def null_space_projector(hB: np.ndarray) -> np.ndarray:

@@ -26,9 +26,9 @@ inside `evaluate_scheme()` in `core/schemes.py` — do not bypass it.
 | `channel.py` | Rayleigh CN(0, I) channels, MRT beamformer `w = hB*/||hB||`, null-space projector `P_perp` |
 | `csi.py` | Imperfect-CSI model: `ĥE = √κ·hE + √(1-κ)·e`, with `e ~ CN(0, I)` |
 | `secrecy.py` | `compute_secrecy_rate(hB, hE, rho, snr_linear)` — AN-averaged closed form, deterministic per channel |
-| `state.py` | `build_state(hB, hE_est, snr_db, last_rho, last_rs)` — 5-element state vector for the DQN |
+| `state.py` | `build_state(hB, hE_est, snr_db, last_rho, last_rs, kappa)` — 7-element state vector for the DQN |
 | `replay_buffer.py` | Circular `(s, a, r, s', done)` buffer with random minibatch sampling |
-| `dqn_agent.py` | Q-network (64-64-32-9), target net, ε-greedy, Huber-loss Bellman update |
+| `dqn_agent.py` | Q-network (64-64-32-17), target net, ε-greedy, Huber-loss Bellman update |
 | `trainer.py` | Training loop: random SNR + random κ per episode, one-step MDP (gamma=0) |
 | `schemes.py` | `fixed_scheme`, `traditional_optimizer`, `make_dqn_scheme` factory, `evaluate_scheme` harness |
 | `experiments.py` | Phase 4 sweeps: kappa, antenna count, secrecy outage probability |
@@ -60,9 +60,11 @@ inside `evaluate_scheme()` in `core/schemes.py` — do not bypass it.
 - **SNR is linear internally** (`snr_linear = P/sigma^2`). `snr_db` only at I/O / state
   encoding boundaries — convert with `10**(snr_db/10)`.
 - **`rho` is in `(0, 1)`**, the fraction of total power on the *signal* (1 - rho on AN).
-- **Action space**: discrete `{0.1, 0.2, ..., 0.9}` → `ACTION_RHOS` in `core.dqn_agent`.
-- **State vector** (5 elements, all roughly in `[0, 1]`):
-  `[||hB||²/Nt, ||ĥE||²/Nt, snr_db/30, last_rho, last_rs/10]`
+- **Action space**: discrete `{0.05, 0.10, ..., 0.85}` (17 actions) → `ACTION_RHOS` in `core.dqn_agent`.
+- **State vector** (7 elements, all roughly in `[0, 1]`):
+  `[||hB||²/Nt, ||ĥE||²/Nt, snr_db/30, last_rho, last_rs/10, kappa, |⟨hB,ĥE⟩|²/(||hB||²||ĥE||²)]`
+  `kappa` is the CSI-quality side-info; the alignment term is the cosine
+  between Bob's beam direction and the noisy Eve estimate.
 - **Reward** = `REWARD_SCALE * compute_secrecy_rate(hB, hE_TRUE, rho, snr_linear)`,
   evaluated against the **true** Eve channel even though the agent only sees a noisy
   estimate. `REWARD_SCALE = 10.0`.
@@ -80,7 +82,7 @@ inside `evaluate_scheme()` in `core/schemes.py` — do not bypass it.
 - **Phase 2** (Scheme 1 + Scheme 2 + simulator validation): done — figures 01, 02.
 - **Phase 3** (DQN training + 3-scheme comparison): done — figures 03, 04, 05.
   DQN trained at three antenna counts: `models/dqn_trained_nt{2,4,8}.keras`.
-  Hyperparams identical across Nt: κ ∈ [0.2, 0.8], SNR ∈ [0, 30] dB, 5000 eps.
+  Hyperparams identical across Nt: κ ∈ [0.1, 0.9], SNR ∈ [0, 30] dB, 7000 eps.
 - **Phase 4** (experiments 2/4/5 — kappa, antenna count, outage): done — figures 06, 07, 08.
   Experiment 4 now shows DQN on every panel (each panel uses the matching per-Nt model).
 - **Phase 6** (Streamlit GUI): minimal version live in `app/streamlit_app.py`.

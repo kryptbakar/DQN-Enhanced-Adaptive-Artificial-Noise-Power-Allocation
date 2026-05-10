@@ -91,13 +91,13 @@ def run_comparison(Nt: int = 4,
             hE_noisy = imperfect_csi(hE, KAPPA_EVAL, rng)
 
             _, rf = evaluate_scheme(fixed_scheme,
-                                    hB, hE, hE_noisy, snr_lin)
+                                    hB, hE, hE_noisy, snr_lin, KAPPA_EVAL)
             _, ro_i = evaluate_scheme(traditional_optimizer,
-                                      hB, hE, hE_noisy, snr_lin)
+                                      hB, hE, hE_noisy, snr_lin, KAPPA_EVAL)
             _, ro_p = evaluate_scheme(traditional_optimizer,
-                                      hB, hE, hE, snr_lin)
+                                      hB, hE, hE, snr_lin, 1.0)
             rho_dqn, rd = evaluate_scheme(dqn_scheme,
-                                          hB, hE, hE_noisy, snr_lin)
+                                          hB, hE, hE_noisy, snr_lin, KAPPA_EVAL)
 
             s_fix += rf
             s_oi  += ro_i

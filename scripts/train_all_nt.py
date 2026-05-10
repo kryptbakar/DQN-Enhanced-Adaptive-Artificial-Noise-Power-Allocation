@@ -29,7 +29,7 @@ DEFAULT_NTS = (2, 4, 8)
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=5000)
+    parser.add_argument("--episodes", type=int, default=7000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--nts", type=int, nargs="+", default=list(DEFAULT_NTS))
     args = parser.parse_args()

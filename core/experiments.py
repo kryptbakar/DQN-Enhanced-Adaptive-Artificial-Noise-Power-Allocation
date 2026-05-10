@@ -28,6 +28,25 @@ experiment_4_antenna_count
 experiment_5_secrecy_outage
     Sweep a target secrecy rate R0 and report the secrecy outage
     probability SOP(R0) = P(Rs < R0) for each scheme.
+
+policy_heatmap
+    Render the trained DQN's learned policy as a 2D map over (SNR, kappa).
+    For each grid cell we sample many channels, ask the agent for its action,
+    and average the chosen rho. Story: shows what the DQN actually learned
+    -- it pushes rho high when both transmit power and CSI quality are scarce.
+
+eve_strength_sweep
+    Sweep Eve's channel-gain advantage beta = E[||hE||^2] / E[||hB||^2]
+    and report each scheme's secrecy rate. Inspired by Qasem 2024 Figure 4
+    (Eve-position effect): larger beta corresponds to Eve being closer to
+    Alice in a geometric model. Story: null-space AN is intrinsically
+    robust to Eve's gain because signal and AN scale together at Eve.
+
+experiment_3_optimal_rho
+    Per-channel oracle comparison: for each channel realisation, brute-force
+    the true rho* against the true hE, then measure how far each scheme's
+    chosen rho lands from rho* and how much Rs is left on the table. Story:
+    DQN chooses rho close to the oracle without ever seeing the true hE.
 """
 
 from __future__ import annotations
@@ -114,11 +133,12 @@ def experiment_2_kappa_sweep(n_channels: int = 400,
     for i, k in enumerate(kappas):
         s_fix = s_tr = s_dq = 0.0
         dqn_scheme.reset()
+        kf = float(k)
         for hB, hE in channels:
-            hE_noisy = imperfect_csi(hE, float(k), rng)
-            _, rf = evaluate_scheme(fixed_scheme,         hB, hE, hE_noisy, snr_lin)
-            _, rt = evaluate_scheme(traditional_optimizer, hB, hE, hE_noisy, snr_lin)
-            _, rd = evaluate_scheme(dqn_scheme,            hB, hE, hE_noisy, snr_lin)
+            hE_noisy = imperfect_csi(hE, kf, rng)
+            _, rf = evaluate_scheme(fixed_scheme,         hB, hE, hE_noisy, snr_lin, kf)
+            _, rt = evaluate_scheme(traditional_optimizer, hB, hE, hE_noisy, snr_lin, kf)
+            _, rd = evaluate_scheme(dqn_scheme,            hB, hE, hE_noisy, snr_lin, kf)
             s_fix += rf
             s_tr  += rt
             s_dq  += rd
@@ -225,14 +245,14 @@ def experiment_4_antenna_count(n_channels: int = 300,
             for hB, hE in channels:
                 hE_noisy = imperfect_csi(hE, kappa, rng)
                 _, rf = evaluate_scheme(fixed_scheme,
-                                        hB, hE, hE_noisy, snr_lin)
+                                        hB, hE, hE_noisy, snr_lin, kappa)
                 _, rt = evaluate_scheme(traditional_optimizer,
-                                        hB, hE, hE_noisy, snr_lin)
+                                        hB, hE, hE_noisy, snr_lin, kappa)
                 s_fix += rf
                 s_tr  += rt
                 if dqn_scheme is not None:
                     _, rd = evaluate_scheme(dqn_scheme,
-                                            hB, hE, hE_noisy, snr_lin)
+                                            hB, hE, hE_noisy, snr_lin, kappa)
                     s_dq += rd
 
             rs_fixed[i] = s_fix / n_channels
@@ -320,11 +340,11 @@ def experiment_5_secrecy_outage(n_channels: int = 1000,
     for j, (hB, hE) in enumerate(channels):
         hE_noisy = imperfect_csi(hE, kappa, rng)
         _, rs_fixed[j] = evaluate_scheme(fixed_scheme,
-                                         hB, hE, hE_noisy, snr_lin)
+                                         hB, hE, hE_noisy, snr_lin, kappa)
         _, rs_trad[j]  = evaluate_scheme(traditional_optimizer,
-                                         hB, hE, hE_noisy, snr_lin)
+                                         hB, hE, hE_noisy, snr_lin, kappa)
         _, rs_dqn[j]   = evaluate_scheme(dqn_scheme,
-                                         hB, hE, hE_noisy, snr_lin)
+                                         hB, hE, hE_noisy, snr_lin, kappa)
 
     r0 = np.linspace(0.0, 8.0, 20)
     sop_fixed = np.array([float(np.mean(rs_fixed < r)) for r in r0])
@@ -365,3 +385,359 @@ def experiment_5_secrecy_outage(n_channels: int = 1000,
             "rs_fixed": rs_fixed,
             "rs_traditional": rs_trad,
             "rs_dqn": rs_dqn}
+
+
+# ---------------------------------------------------------------------------
+# Policy heatmap -- visualises the learned DQN policy as a 2D map
+# ---------------------------------------------------------------------------
+
+def policy_heatmap(model_path: str | None = None,
+                   Nt: int = 4,
+                   n_channels: int = 80,
+                   n_snr: int = 16,
+                   n_kappa: int = 11,
+                   snr_db_min: float = 0.0,
+                   snr_db_max: float = 30.0,
+                   fig_dir: str = "figures",
+                   seed: int = 2026,
+                   annotate: bool = True) -> Dict[str, np.ndarray]:
+    """
+    Render the trained DQN's learned policy as a 2D heatmap over (SNR, kappa).
+
+    For each (SNR, kappa) grid cell we sample n_channels random Rayleigh
+    channels, build a kappa-noisy estimate of Eve's channel, ask the DQN
+    which rho to play, and average the chosen rho across the batch. The
+    result is a smooth picture of the policy as a function of operating
+    conditions -- this is the most defendable single figure for the
+    "what did the DQN actually learn?" question.
+
+    Returns a dict with: 'snr_db', 'kappa', 'rho_mean', 'rho_std'.
+    """
+    os.makedirs(fig_dir, exist_ok=True)
+    if model_path is None:
+        model_path = default_model_path(Nt)
+    _, dqn_scheme = _load_dqn(model_path)
+
+    snrs = np.linspace(snr_db_min, snr_db_max, n_snr)
+    kappas = np.linspace(0.0, 1.0, n_kappa)
+
+    rho_mean = np.zeros((n_kappa, n_snr))
+    rho_std  = np.zeros((n_kappa, n_snr))
+
+    print(f"[POLICY] Nt={Nt}, sweeping {n_snr} SNRs x {n_kappa} kappas, "
+          f"{n_channels} channels per cell")
+
+    for ki, k in enumerate(kappas):
+        for si, snr_db in enumerate(snrs):
+            # fresh RNG per cell -> reproducible without ordering effects
+            rng = np.random.default_rng(seed + ki * 1000 + si)
+            snr_lin = 10.0 ** (snr_db / 10.0)
+            dqn_scheme.reset()
+            rhos_here = np.empty(n_channels)
+            kf = float(k)
+            for j in range(n_channels):
+                hB = generate_rayleigh_channel(Nt, rng)
+                hE = generate_rayleigh_channel(Nt, rng)
+                hE_noisy = imperfect_csi(hE, kf, rng)
+                rhos_here[j] = dqn_scheme(hB, hE_noisy, snr_lin, kf)
+            rho_mean[ki, si] = float(rhos_here.mean())
+            rho_std[ki, si]  = float(rhos_here.std())
+        print(f"  kappa={k:.2f}: mean rho across SNR = "
+              f"[{rho_mean[ki].min():.2f} .. {rho_mean[ki].max():.2f}]")
+
+    # ---- plot: 2-panel figure (heatmap + marginal SNR dependence) ----
+    rho_marginal_snr   = rho_mean.mean(axis=0)   # avg across kappa
+    rho_marginal_kappa = rho_mean.mean(axis=1)   # avg across SNR
+
+    fig, axes = plt.subplots(
+        1, 2, figsize=(13.0, 5.4),
+        gridspec_kw={"width_ratios": [2.2, 1.0]},
+    )
+    ax_hm, ax_mar = axes
+
+    vmin = max(0.4, float(rho_mean.min()) - 0.05)
+    vmax = min(0.9, float(rho_mean.max()) + 0.05)
+    extent = [snrs[0] - (snrs[1]-snrs[0])/2,
+              snrs[-1] + (snrs[1]-snrs[0])/2,
+              kappas[0] - (kappas[1]-kappas[0])/2,
+              kappas[-1] + (kappas[1]-kappas[0])/2]
+    im = ax_hm.imshow(rho_mean, aspect="auto", origin="lower",
+                      extent=extent, cmap="viridis", vmin=vmin, vmax=vmax)
+    cbar = fig.colorbar(im, ax=ax_hm, pad=0.02)
+    cbar.set_label("Mean rho chosen by DQN")
+
+    if annotate:
+        mid = 0.5 * (vmin + vmax)
+        for ki in range(n_kappa):
+            for si in range(n_snr):
+                val = rho_mean[ki, si]
+                txt_color = "white" if val < mid else "black"
+                ax_hm.text(snrs[si], kappas[ki], f"{val:.2f}",
+                           ha="center", va="center",
+                           color=txt_color, fontsize=7.5)
+
+    ax_hm.set_xlabel("Transmit SNR (dB)")
+    ax_hm.set_ylabel("CSI quality  kappa")
+    ax_hm.set_title("Learned DQN policy: rho(SNR, kappa)")
+
+    # Marginal: rho averaged across all kappa, vs SNR
+    ax_mar.plot(snrs, rho_marginal_snr, "D-", color="#2ca02c",
+                linewidth=2.4, markersize=7,
+                label="DQN (avg over kappa)")
+    ax_mar.axhline(0.5, color="#7f7f7f", linestyle=":",
+                   linewidth=1.5, label="Fixed scheme (rho=0.5)")
+    ax_mar.set_xlabel("Transmit SNR (dB)")
+    ax_mar.set_ylabel("Mean rho")
+    ax_mar.set_ylim(0.45, 0.85)
+    ax_mar.set_title("Policy vs SNR (marginal)")
+    ax_mar.grid(True, alpha=0.3)
+    ax_mar.legend(loc="upper right", fontsize=9)
+
+    fig.suptitle(f"Learned DQN policy at Nt = {Nt}  "
+                 f"({n_channels} channels per cell)",
+                 fontsize=12, y=1.02)
+    fig.tight_layout()
+    out = os.path.join(fig_dir, "09_policy_heatmap.png")
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[SAVE] {out}")
+    print(f"  Marginal rho vs SNR: "
+          f"low={rho_marginal_snr[0]:.2f}, "
+          f"mid={rho_marginal_snr[len(snrs)//2]:.2f}, "
+          f"high={rho_marginal_snr[-1]:.2f}")
+    print(f"  Marginal rho vs kappa: "
+          f"low={rho_marginal_kappa[0]:.2f}, "
+          f"mid={rho_marginal_kappa[len(kappas)//2]:.2f}, "
+          f"high={rho_marginal_kappa[-1]:.2f}\n")
+
+    return {"snr_db": snrs, "kappa": kappas,
+            "rho_mean": rho_mean, "rho_std": rho_std}
+
+
+# ---------------------------------------------------------------------------
+# Eve-strength sweep -- Qasem-inspired analysis (Eve closer to Alice = bigger beta)
+# ---------------------------------------------------------------------------
+
+def eve_strength_sweep(model_path: str | None = None,
+                       Nt: int = 4,
+                       n_channels: int = 400,
+                       snr_db: float = 15.0,
+                       kappa: float = 0.4,
+                       betas_db=(-6, -3, 0, 3, 6, 9),
+                       fig_dir: str = "figures",
+                       seed: int = 2026) -> Dict[str, np.ndarray]:
+    """
+    Sweep Eve's channel-gain advantage and report each scheme's average Rs.
+
+    We scale Eve's true channel by sqrt(beta), where beta = 10^(beta_db/10).
+    In the Qasem 2024 paper this corresponds to varying the eavesdropper
+    position (smaller distance -> stronger Eve channel). Our simulator has
+    no geometry, so we induce the same effect through the channel-gain ratio.
+
+    The noisy CSI estimate is built from the scaled true channel via the
+    standard imperfect-CSI model in core.csi.
+
+    Returns a dict with: 'beta_db', 'rs_fixed', 'rs_traditional', 'rs_dqn'.
+    """
+    os.makedirs(fig_dir, exist_ok=True)
+    if model_path is None:
+        model_path = default_model_path(Nt)
+    _, dqn_scheme = _load_dqn(model_path)
+
+    rng = np.random.default_rng(seed)
+    snr_lin = 10.0 ** (snr_db / 10.0)
+    channels = _sample_channels(Nt, n_channels, rng)
+
+    betas_db = np.asarray(betas_db, dtype=float)
+    betas    = 10.0 ** (betas_db / 10.0)
+
+    rs_fixed = np.zeros_like(betas)
+    rs_trad  = np.zeros_like(betas)
+    rs_dqn   = np.zeros_like(betas)
+
+    print(f"[EVE-STRENGTH] Nt={Nt}, SNR={snr_db:.0f} dB, kappa={kappa}, "
+          f"{n_channels} channels per beta")
+    print(f"  {'beta_dB':>7} | {'beta':>6} | {'Fixed':>6} | "
+          f"{'Trad':>6} | {'DQN':>6}")
+    print("  " + "-" * 44)
+
+    for i, (b_db, b) in enumerate(zip(betas_db, betas)):
+        s_fix = s_tr = s_dq = 0.0
+        dqn_scheme.reset()
+        sb = float(np.sqrt(b))
+        for hB, hE in channels:
+            hE_scaled = sb * hE                              # stronger/weaker Eve
+            hE_noisy  = imperfect_csi(hE_scaled, kappa, rng) # CSI built from scaled
+            _, rf = evaluate_scheme(fixed_scheme,
+                                    hB, hE_scaled, hE_noisy, snr_lin, kappa)
+            _, rt = evaluate_scheme(traditional_optimizer,
+                                    hB, hE_scaled, hE_noisy, snr_lin, kappa)
+            _, rd = evaluate_scheme(dqn_scheme,
+                                    hB, hE_scaled, hE_noisy, snr_lin, kappa)
+            s_fix += rf
+            s_tr  += rt
+            s_dq  += rd
+        rs_fixed[i] = s_fix / n_channels
+        rs_trad[i]  = s_tr  / n_channels
+        rs_dqn[i]   = s_dq  / n_channels
+        print(f"  {b_db:>+7.1f} | {b:>6.2f} | "
+              f"{rs_fixed[i]:>6.3f} | {rs_trad[i]:>6.3f} | {rs_dqn[i]:>6.3f}")
+
+    # ---- plot ----
+    fig, ax = plt.subplots(figsize=(9.0, 5.4))
+    ax.plot(betas_db, rs_fixed, "o-", color="#7f7f7f", linewidth=1.9,
+            markersize=7, label="Scheme 1: Fixed (rho=0.5)")
+    ax.plot(betas_db, rs_trad, "s--", color="#c0504d", linewidth=2.0,
+            markersize=7, label=f"Scheme 2: Traditional (k={kappa})")
+    ax.plot(betas_db, rs_dqn, "D-", color="#2ca02c", linewidth=2.4,
+            markersize=8, label=f"Scheme 3: DQN (k={kappa})")
+    ax.axvline(0.0, color="black", linestyle=":", alpha=0.4,
+               label="beta = 1 (Bob and Eve symmetric)")
+    ax.set_xlabel("Eve channel-gain advantage  10 log10(beta)  (dB)\n"
+                  "(larger = Eve is closer / has a stronger channel)")
+    ax.set_ylabel("Average secrecy rate  Rs  (bits/s/Hz)")
+    ax.set_title(f"Eve-strength sweep  (Qasem-inspired)\n"
+                 f"Nt={Nt}, SNR={snr_db:.0f} dB, kappa={kappa}, "
+                 f"{n_channels} unseen channels per point")
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="best", fontsize=9)
+    fig.tight_layout()
+    out = os.path.join(fig_dir, "10_eve_strength.png")
+    fig.savefig(out, dpi=120)
+    plt.close(fig)
+    print(f"[SAVE] {out}\n")
+
+    return {"beta_db": betas_db, "beta": betas,
+            "rs_fixed": rs_fixed,
+            "rs_traditional": rs_trad,
+            "rs_dqn": rs_dqn}
+
+
+# ---------------------------------------------------------------------------
+# Experiment 3 -- optimal-rho comparison (per-channel oracle)
+# ---------------------------------------------------------------------------
+
+def experiment_3_optimal_rho(model_path: str | None = None,
+                             Nt: int = 4,
+                             n_channels: int = 600,
+                             snr_db: float = 15.0,
+                             kappa: float = 0.4,
+                             fig_dir: str = "figures",
+                             seed: int = 2026) -> Dict[str, np.ndarray]:
+    """
+    Compare each scheme's chosen rho against the per-channel oracle rho*.
+
+    For each Monte Carlo channel realisation:
+      1. Compute rho* = argmax Rs(rho) using the TRUE hE -- this is the
+         oracle that no scheme can see at run time.
+      2. Ask each scheme to pick its rho using only its allowed CSI.
+      3. Record (rho_chosen - rho*) and (Rs_oracle - Rs_chosen).
+
+    The figure has two panels:
+      Left:  histograms of |rho_chosen - rho*| per scheme.
+      Right: histograms of (Rs_oracle - Rs_chosen) per scheme.
+
+    Returns a dict with raw arrays for further analysis.
+    """
+    os.makedirs(fig_dir, exist_ok=True)
+    if model_path is None:
+        model_path = default_model_path(Nt)
+    _, dqn_scheme = _load_dqn(model_path)
+
+    rng = np.random.default_rng(seed)
+    snr_lin = 10.0 ** (snr_db / 10.0)
+    channels = _sample_channels(Nt, n_channels, rng)
+
+    # Brute-force grid for the oracle rho*
+    rho_grid = np.linspace(0.05, 0.95, 91)
+
+    rho_star = np.zeros(n_channels)
+    rs_star  = np.zeros(n_channels)
+    rho_fix  = np.zeros(n_channels)
+    rho_trd  = np.zeros(n_channels)
+    rho_dqn  = np.zeros(n_channels)
+    rs_fix   = np.zeros(n_channels)
+    rs_trd   = np.zeros(n_channels)
+    rs_dqn   = np.zeros(n_channels)
+
+    print(f"[EXP 3] optimal-rho comparison at SNR={snr_db:.0f} dB, "
+          f"kappa={kappa}, Nt={Nt}, {n_channels} channels")
+
+    dqn_scheme.reset()
+    for j, (hB, hE) in enumerate(channels):
+        # Oracle: brute-force on TRUE hE
+        rs_curve = np.array([compute_secrecy_rate(hB, hE, float(r), snr_lin)
+                             for r in rho_grid])
+        idx = int(np.argmax(rs_curve))
+        rho_star[j] = float(rho_grid[idx])
+        rs_star[j]  = float(rs_curve[idx])
+
+        # Each scheme's noisy CSI
+        hE_noisy = imperfect_csi(hE, kappa, rng)
+        rho_fix[j], rs_fix[j] = evaluate_scheme(fixed_scheme,
+                                                hB, hE, hE_noisy, snr_lin, kappa)
+        rho_trd[j], rs_trd[j] = evaluate_scheme(traditional_optimizer,
+                                                hB, hE, hE_noisy, snr_lin, kappa)
+        rho_dqn[j], rs_dqn[j] = evaluate_scheme(dqn_scheme,
+                                                hB, hE, hE_noisy, snr_lin, kappa)
+
+    # Aggregate stats
+    err_fix = np.abs(rho_fix - rho_star)
+    err_trd = np.abs(rho_trd - rho_star)
+    err_dqn = np.abs(rho_dqn - rho_star)
+    gap_fix = rs_star - rs_fix
+    gap_trd = rs_star - rs_trd
+    gap_dqn = rs_star - rs_dqn
+
+    print(f"  Mean |rho - rho*|:  Fixed={err_fix.mean():.3f}, "
+          f"Trad={err_trd.mean():.3f}, DQN={err_dqn.mean():.3f}")
+    print(f"  Mean Rs gap to oracle (bits/s/Hz): "
+          f"Fixed={gap_fix.mean():.3f}, "
+          f"Trad={gap_trd.mean():.3f}, "
+          f"DQN={gap_dqn.mean():.3f}")
+    print(f"  Oracle mean Rs* = {rs_star.mean():.3f} bits/s/Hz")
+
+    # ---- plot: 2-panel ----
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13.0, 5.2))
+
+    bins_err = np.linspace(0.0, 0.9, 19)
+    ax1.hist([err_fix, err_trd, err_dqn], bins=bins_err,
+             label=[f"Fixed (mean={err_fix.mean():.2f})",
+                    f"Traditional (mean={err_trd.mean():.2f})",
+                    f"DQN (mean={err_dqn.mean():.2f})"],
+             color=["#7f7f7f", "#c0504d", "#2ca02c"],
+             alpha=0.85, edgecolor="black", linewidth=0.4)
+    ax1.set_xlabel("|rho_chosen - rho*|")
+    ax1.set_ylabel("Channels")
+    ax1.set_title("How far is each scheme from the oracle rho*?")
+    ax1.legend(loc="upper right", fontsize=9)
+    ax1.grid(True, alpha=0.3, axis="y")
+
+    bins_gap = np.linspace(0.0, max(gap_fix.max(), gap_trd.max(),
+                                    gap_dqn.max(), 0.5), 25)
+    ax2.hist([gap_fix, gap_trd, gap_dqn], bins=bins_gap,
+             label=[f"Fixed (mean={gap_fix.mean():.3f})",
+                    f"Traditional (mean={gap_trd.mean():.3f})",
+                    f"DQN (mean={gap_dqn.mean():.3f})"],
+             color=["#7f7f7f", "#c0504d", "#2ca02c"],
+             alpha=0.85, edgecolor="black", linewidth=0.4)
+    ax2.set_xlabel("Rs_oracle - Rs_chosen  (bits/s/Hz)")
+    ax2.set_ylabel("Channels")
+    ax2.set_title("Secrecy rate left on the table")
+    ax2.legend(loc="upper right", fontsize=9)
+    ax2.grid(True, alpha=0.3, axis="y")
+
+    fig.suptitle(f"Experiment 3 -- per-channel oracle comparison\n"
+                 f"Nt={Nt}, SNR={snr_db:.0f} dB, kappa={kappa}, "
+                 f"{n_channels} unseen channels", fontsize=11)
+    fig.tight_layout()
+    out = os.path.join(fig_dir, "11_optimal_rho_comparison.png")
+    fig.savefig(out, dpi=120, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[SAVE] {out}\n")
+
+    return {"rho_star": rho_star, "rs_star": rs_star,
+            "rho_fixed": rho_fix, "rho_traditional": rho_trd, "rho_dqn": rho_dqn,
+            "rs_fixed": rs_fix, "rs_traditional": rs_trd, "rs_dqn": rs_dqn,
+            "err_fixed": err_fix, "err_traditional": err_trd, "err_dqn": err_dqn,
+            "gap_fixed": gap_fix, "gap_traditional": gap_trd, "gap_dqn": gap_dqn}

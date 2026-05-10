@@ -33,13 +33,15 @@ from .state import build_state
 
 def fixed_scheme(hB: np.ndarray,
                  hE_estimate: np.ndarray,
-                 snr_linear: float) -> float:
+                 snr_linear: float,
+                 kappa: float | None = None) -> float:
     """
     Always return rho = 0.5 (equal split between signal and AN).
 
     This is the original baseline from Goel & Negi (2008). It uses no CSI
     and does not adapt to the channel. We keep the same signature as the
-    other schemes so that evaluate_scheme() is uniform.
+    other schemes so that evaluate_scheme() is uniform. The kappa argument
+    is accepted for signature uniformity and ignored.
     """
     return 0.5
 
@@ -51,6 +53,7 @@ def fixed_scheme(hB: np.ndarray,
 def traditional_optimizer(hB: np.ndarray,
                           hE_estimate: np.ndarray,
                           snr_linear: float,
+                          kappa: float | None = None,
                           rho_bounds: Tuple[float, float] = (0.01, 0.99)
                           ) -> float:
     """
@@ -81,11 +84,12 @@ def traditional_optimizer(hB: np.ndarray,
 # Evaluation harness (used by demo.py and later by experiments.py)
 # ---------------------------------------------------------------------------
 
-def evaluate_scheme(scheme_fn: Callable[[np.ndarray, np.ndarray, float], float],
+def evaluate_scheme(scheme_fn: Callable[..., float],
                     hB: np.ndarray,
                     hE_true: np.ndarray,
                     hE_estimate: np.ndarray,
-                    snr_linear: float) -> Tuple[float, float]:
+                    snr_linear: float,
+                    kappa: float | None = None) -> Tuple[float, float]:
     """
     Run a scheme on one channel realisation and report (chosen_rho, achieved_Rs).
 
@@ -94,6 +98,11 @@ def evaluate_scheme(scheme_fn: Callable[[np.ndarray, np.ndarray, float], float],
     against the TRUE hE. This separation is what makes the kappa sweep
     (Experiment 2) honest.
 
+    `kappa` is the CSI-quality parameter that produced hE_estimate. It is
+    treated as side information that Alice knows from her feedback-channel
+    statistics (standard assumption in the PLS-imperfect-CSI literature),
+    so the DQN scheme is allowed to use it. Fixed and Traditional ignore it.
+
     Args:
         scheme_fn:   One of fixed_scheme, traditional_optimizer, dqn_scheme...
         hB:          Bob's true channel.
@@ -101,11 +110,14 @@ def evaluate_scheme(scheme_fn: Callable[[np.ndarray, np.ndarray, float], float],
         hE_estimate: The CSI visible to the scheme (hE_true if perfect; a
                      noisy ĥE from core.csi.imperfect_csi otherwise).
         snr_linear:  Transmit SNR in linear scale.
+        kappa:       CSI quality factor that generated hE_estimate, in [0, 1].
+                     Optional for backwards compatibility with old test code;
+                     when omitted the DQN scheme falls back to assuming kappa=0.5.
 
     Returns:
         (rho_chosen, secrecy_rate_achieved)
     """
-    rho = scheme_fn(hB, hE_estimate, snr_linear)
+    rho = scheme_fn(hB, hE_estimate, snr_linear, kappa)
     rs = compute_secrecy_rate(hB, hE_true, rho, snr_linear)
     return rho, rs
 
@@ -136,10 +148,13 @@ def make_dqn_scheme(agent: DQNAgent,
             self.last_rho = last_rho_init
             self.last_rs  = last_rs_init
 
-        def __call__(self, hB, hE_estimate, snr_linear):
+        def __call__(self, hB, hE_estimate, snr_linear, kappa=None):
             snr_db = 10.0 * np.log10(snr_linear)
+            # If a caller forgets to pass kappa, fall back to the midpoint
+            # of the training range so the network gets a sane input.
+            k = 0.5 if kappa is None else float(kappa)
             state = build_state(hB, hE_estimate, snr_db,
-                                self.last_rho, self.last_rs)
+                                self.last_rho, self.last_rs, k)
             action = agent.act(state, epsilon=0.0)    # greedy at test time
             rho = float(ACTION_RHOS[action])
             # Update memory using the CHOSEN rho evaluated against the CSI
