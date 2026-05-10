@@ -32,6 +32,12 @@ figures/*.png
 # Exception: figure 12 (the before/after comparison) is embedded in
 # report/slides.pptx and is therefore part of the tracked deliverable.
 !figures/12_before_after.png
+# Exception: figure 13 (clean training curve) is embedded in
+# report/slides.pptx (slide 8).
+!figures/13_training_curve_clean.png
+# Exception: figure 14 (Alice/Bob/Eve geometry sketch) is embedded
+# in report/slides.pptx (slide 3).
+!figures/14_geometry_sketch.png
 
 # --- Project: trained models (large) -- but keep the per-Nt headline weights ---
 models/*.keras
