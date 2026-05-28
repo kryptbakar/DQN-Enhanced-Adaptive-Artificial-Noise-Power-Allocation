@@ -1,5 +1,8 @@
 # DQN-Enhanced Adaptive Artificial Noise Power Allocation
 
+## Project Description
+Deep Q-Network agent for adaptive artificial noise power allocation over a MISO wiretap channel under imperfect CSI. Benchmarked against non-learning baselines at three antenna counts.
+
 MISO wiretap channel under imperfect CSI. CY315 Wireless and Mobile
 Security course project, Spring 2026. Track 2 (Implementation &
 Optimisation).
